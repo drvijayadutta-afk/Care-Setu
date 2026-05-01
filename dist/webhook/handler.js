@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleWebhookVerification = handleWebhookVerification;
 exports.handleWebhookMessage = handleWebhookMessage;
+exports.processMessage = processMessage;
 const client_1 = require("../db/client");
 const sender_1 = require("./sender");
 const intents_1 = require("../ai/intents");
@@ -23,9 +24,21 @@ async function handleWebhookVerification(request, reply) {
     return reply.status(403).send("Forbidden");
 }
 async function handleWebhookMessage(request, reply) {
-    // Always ack immediately to prevent WhatsApp retries
     reply.status(200).send("OK");
     const body = request.body;
+    // Aisensy format
+    if (body?.phoneNumber && body?.message) {
+        const message = {
+            id: body.messageId || body.id || `aisensy_${Date.now()}`,
+            from: body.phoneNumber,
+            timestamp: body.timestamp || new Date().toISOString(),
+            type: "text",
+            text: { body: body.message },
+        };
+        await processMessage(message, "aisensy").catch((err) => console.error("Error processing message:", err));
+        return;
+    }
+    // Meta WhatsApp Cloud API format
     if (body?.object !== "whatsapp_business_account")
         return;
     for (const entry of body.entry || []) {

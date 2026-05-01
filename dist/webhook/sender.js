@@ -10,17 +10,33 @@ exports.sendTemplate = sendTemplate;
 exports.markRead = markRead;
 exports.downloadMediaUrl = downloadMediaUrl;
 const axios_1 = __importDefault(require("axios"));
-const BASE_URL = `https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION || "v21.0"}`;
+const API_VERSION = process.env.WHATSAPP_API_VERSION || "v21.0";
 const PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
 const TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
-const wa = axios_1.default.create({
-    baseURL: `${BASE_URL}/${PHONE_ID}/messages`,
-    headers: {
-        Authorization: `Bearer ${TOKEN}`,
-        "Content-Type": "application/json",
-    },
-});
+const IS_AISENSY = API_VERSION === "aisensy";
+const wa = !IS_AISENSY
+    ? axios_1.default.create({
+        baseURL: `https://graph.facebook.com/v21.0/${PHONE_ID}/messages`,
+        headers: {
+            Authorization: `Bearer ${TOKEN}`,
+            "Content-Type": "application/json",
+        },
+    })
+    : axios_1.default.create({
+        baseURL: "https://app.aisensy.com/api/v1",
+        headers: {
+            Authorization: `Bearer ${TOKEN}`,
+            "Content-Type": "application/json",
+        },
+    });
 async function sendText(to, body) {
+    if (IS_AISENSY) {
+        const { data } = await wa.post("/send-message", {
+            phoneNumber: to,
+            message: body,
+        });
+        return data?.messageId ?? data?.id ?? null;
+    }
     const { data } = await wa.post("", {
         messaging_product: "whatsapp",
         recipient_type: "individual",
@@ -80,6 +96,8 @@ async function sendTemplate(to, templateName, languageCode, components) {
     return data?.messages?.[0]?.id ?? null;
 }
 async function markRead(messageId) {
+    if (IS_AISENSY)
+        return; // Aisensy handles read status automatically
     await wa.post("", {
         messaging_product: "whatsapp",
         status: "read",
@@ -87,7 +105,9 @@ async function markRead(messageId) {
     });
 }
 async function downloadMediaUrl(mediaId) {
-    const { data } = await axios_1.default.get(`${BASE_URL}/${mediaId}`, {
+    if (IS_AISENSY)
+        throw new Error("Aisensy media download not yet implemented");
+    const { data } = await axios_1.default.get(`https://graph.facebook.com/v21.0/${mediaId}`, {
         headers: { Authorization: `Bearer ${TOKEN}` },
     });
     return data.url;

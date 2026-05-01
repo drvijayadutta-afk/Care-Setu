@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../db/client";
 import { sendMessage as sendAisensyMessage } from "../integrations/aisensy";
+import { wsManager } from "../websocket/manager";
 
 export async function registerApiRoutes(fastify: FastifyInstance) {
   // Get all patients
@@ -121,6 +122,15 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
         },
       });
 
+      // Broadcast message event via WebSocket
+      wsManager.broadcast(id, {
+        type: "message",
+        patientId: id,
+        conversationId: conversation.id,
+        content: message,
+        role: "assistant",
+      });
+
       return {
         success: true,
         conversationId: conversation.id,
@@ -162,6 +172,15 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
         },
       });
 
+      // Broadcast appointment creation event via WebSocket
+      wsManager.broadcast(id, {
+        type: "appointment",
+        patientId: id,
+        appointmentId: appointment.id,
+        action: "created",
+        status: appointment.status,
+      });
+
       return appointment;
     } catch (error) {
       console.error("Error creating appointment:", error);
@@ -188,6 +207,15 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
           ...(notes !== undefined && { notes }),
           ...(status && { status: status as any }),
         },
+      });
+
+      // Broadcast appointment update event via WebSocket
+      wsManager.broadcast(appointment.patientId, {
+        type: "appointment",
+        patientId: appointment.patientId,
+        appointmentId: appointment.id,
+        action: "updated",
+        status: appointment.status,
       });
 
       return appointment;

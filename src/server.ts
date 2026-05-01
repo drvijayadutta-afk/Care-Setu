@@ -1,6 +1,7 @@
 import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import websocket from "@fastify/websocket";
 import {
   handleWebhookVerification,
   handleWebhookMessage,
@@ -14,6 +15,7 @@ import {
 import { doctorSignalQueue, checkinQueue } from "./jobs/queue";
 import { pollAisensyMessages } from "./integrations/aisensy-poller";
 import { registerApiRoutes } from "./api/routes";
+import { registerWebSocketRoutes } from "./websocket/routes";
 
 const fastify = Fastify({
   logger: process.env.NODE_ENV !== "production",
@@ -63,8 +65,14 @@ async function start() {
       origin: true,
     });
 
+    // Add WebSocket support
+    await fastify.register(websocket);
+
     // Register API routes
     await registerApiRoutes(fastify);
+
+    // Register WebSocket routes
+    await registerWebSocketRoutes(fastify);
 
     await fastify.listen({
       port: parseInt(process.env.PORT || "3000"),
