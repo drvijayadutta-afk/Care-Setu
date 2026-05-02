@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../db/client";
-import { markRead } from "./sender";
+import { sendText, sendButtonMessage, markRead } from "../webhook/sender";
 import { classifyIntent } from "../ai/intents";
 import { handleCheckinResponse } from "../modules/checkin/engine";
 import { handleAppointmentRequest } from "../modules/appointments/booking";
@@ -9,10 +9,9 @@ import { handleOnboarding } from "../modules/onboarding/flow";
 import { handleCaregiverMessage } from "../modules/caregiver/track";
 import { handleMedicationQuery } from "../modules/medications/context";
 
-// Convert Telegram update to internal message format
 interface InternalMessage {
   id: string;
-  from: string; // chat_id as string
+  from: string;
   timestamp: string;
   type: string;
   text?: { body: string };
@@ -27,17 +26,18 @@ export async function handleTelegramWebhook(
   request: FastifyRequest,
   reply: FastifyReply
 ) {
+  // Always reply 200 immediately so Telegram doesn't retry
   reply.status(200).send("OK");
 
   const body = request.body as any;
-  console.log("📨 Telegram update received:", JSON.stringify(body).slice(0, 200));
+  console.log("📨 Telegram update:", JSON.stringify(body).slice(0, 300));
 
   try {
-    // Handle regular messages
+    // Regular text/voice message
     if (body?.message) {
       const msg = body.message;
       const chatId = msg.chat.id.toString();
-      console.log(`💬 Message from chatId: ${chatId}, text: ${msg.text}`);
+      console.log(`💬 From: ${chatId} | Text: ${msg.text}`);
 
       let internal: InternalMessage = {
         id: msg.message_id.toString(),
@@ -54,21 +54,26 @@ export async function handleTelegramWebhook(
         internal.type = "audio";
         internal.audio = { id: audio.file_id, mime_type: audio.mime_type || "audio/ogg" };
       } else {
+        console.log("⏭️ Unsupported message type, skipping");
         return;
       }
 
-      await processMessage(internal).catch(async (err) => {
-        console.error("❌ processMessage error:", err?.message || err);
-        // Always send fallback so user knows bot is alive
-        const { sendText } = await import("../webhook/sender");
-        await sendText(chatId, "🙏 Welcome to Care Setu! We are setting up your profile. Please send your name to get started.").catch(() => {});
-      });
+      try {
+        await processMessage(internal);
+      } catch (err: any) {
+        console.error("❌ processMessage failed:", err?.message || err);
+        // Fallback reply so user is never left hanging
+        await sendText(chatId,
+          "🙏 *Welcome to Care Setu!*\n\nI'm your cancer care companion. Please send \"Hello\" to begin your registration."
+        ).catch((e) => console.error("Fallback send failed:", e));
+      }
     }
 
-    // Handle button clicks (callback queries)
+    // Button click (callback query)
     if (body?.callback_query) {
       const cb = body.callback_query;
       const chatId = cb.message.chat.id.toString();
+      console.log(`🔘 Button click from: ${chatId} | Data: ${cb.data}`);
 
       const internal: InternalMessage = {
         id: cb.id,
@@ -77,28 +82,32 @@ export async function handleTelegramWebhook(
         type: "interactive",
         interactive: {
           type: "button_reply",
-          button_reply: {
-            id: cb.data,
-            title: cb.data,
-          },
+          button_reply: { id: cb.data, title: cb.data },
         },
       };
 
-      await processMessage(internal);
+      try {
+        await processMessage(internal);
+      } catch (err: any) {
+        console.error("❌ processMessage (callback) failed:", err?.message || err);
+      }
     }
-  } catch (err) {
-    console.error("Telegram webhook error:", err);
+  } catch (err: any) {
+    console.error("❌ Telegram webhook outer error:", err?.message || err);
   }
 }
 
 async function processMessage(message: InternalMessage) {
-  const from = message.from; // Telegram chat_id
+  const from = message.from;
+  const messageId = message.id;
+
+  await markRead(messageId).catch(() => {}); // no-op for Telegram
 
   // Check if sender is a caregiver
   const caregiver = await prisma.caregiver.findUnique({
-    where: { whatsappNumber: from }, // reusing whatsappNumber field for Telegram chat_id
+    where: { whatsappNumber: from },
     include: { patient: true },
-  });
+  }).catch(() => null);
 
   if (caregiver?.isEnrolled) {
     const text = extractText(message);
@@ -108,40 +117,49 @@ async function processMessage(message: InternalMessage) {
 
   // Find or handle new patient
   let patient = await prisma.patient.findUnique({
-    where: { whatsappNumber: from }, // reusing whatsappNumber field for Telegram chat_id
-  });
+    where: { whatsappNumber: from },
+  }).catch(() => null);
 
   // New patient — start onboarding
   if (!patient) {
+    console.log(`🆕 New user ${from} — starting onboarding`);
     await handleOnboarding(from, null, extractText(message) || "");
     return;
   }
 
   // Patient mid-onboarding
   if (patient.onboardingStep < 9) {
+    console.log(`🔄 User ${from} onboarding step ${patient.onboardingStep}`);
     await handleOnboarding(from, patient, extractText(message) || "");
     return;
   }
 
   // Get message text
   let text = extractText(message);
+  let isVoiceNote = false;
+
+  if (message.type === "audio" && message.audio) {
+    isVoiceNote = true;
+    const { transcribeVoiceNote } = await import("../integrations/whisper");
+    text = await transcribeVoiceNote(message.audio.id, patient.language).catch(() => null);
+    if (!text) return;
+  }
 
   // Store conversation
   await prisma.conversation.create({
     data: {
       patientId: patient.id,
       role: "patient",
-      messageType: message.interactive ? "interactive" : "text",
+      messageType: isVoiceNote ? "voice" : message.interactive ? "interactive" : "text",
       content: text || "",
       isNightMode: isNightHours(),
     },
   });
 
-  // Handle interactive button responses
+  // Handle button responses
   if (message.interactive) {
     const replyId = message.interactive.button_reply?.id;
     const replyTitle = message.interactive.button_reply?.title;
-
     if (replyId?.startsWith("checkin_")) {
       await handleCheckinResponse(patient, replyId, replyTitle || "");
       return;
@@ -171,25 +189,21 @@ async function processMessage(message: InternalMessage) {
     isNightHours()
   );
 
-  // Route to handler
+  console.log(`🧠 Intent: ${intent.intent} for user ${from}`);
+
   switch (intent.intent) {
     case "checkin_response":
-      await handleCheckinResponse(patient, text, intent.extractedScore);
-      break;
+      await handleCheckinResponse(patient, text, intent.extractedScore); break;
     case "appointment_request":
-      await handleAppointmentRequest(patient, text, intent.appointmentType);
-      break;
+      await handleAppointmentRequest(patient, text, intent.appointmentType); break;
     case "medication_query":
-      await handleMedicationQuery(patient, text);
-      break;
+      await handleMedicationQuery(patient, text); break;
     case "symptom_report":
-      await handleCheckinResponse(patient, text, undefined, true);
-      break;
+      await handleCheckinResponse(patient, text, undefined, true); break;
     case "emotional_support":
     case "unknown":
     default:
-      await handleEmotionalSupport(patient, text, isNightHours(), recentMessages);
-      break;
+      await handleEmotionalSupport(patient, text, isNightHours(), recentMessages); break;
   }
 }
 
