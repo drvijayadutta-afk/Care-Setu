@@ -3,5 +3,9 @@
   "installCommand": "npm --prefix coordinator-app install",
   "outputDirectory": "coordinator-app/.next",
   "framework": "nextjs",
-  "regions": ["iad1"]
+  "regions": ["iad1"],
+  "env": {
+    "NEXT_PUBLIC_API_URL": "https://care-setu-backend.onrender.com",
+    "NEXT_PUBLIC_APP_NAME": "Cancer AI - Coordinator Dashboard"
+  }
 }

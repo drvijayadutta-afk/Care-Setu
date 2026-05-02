@@ -33,7 +33,12 @@ export default function PatientDetailPage() {
   const [messageInput, setMessageInput] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
-  const [appointmentForm, setAppointmentForm] = useState({
+  const [appointmentForm, setAppointmentForm] = useState<{
+    type: string;
+    scheduledAt: string;
+    notes: string;
+    status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  }>({
     type: '',
     scheduledAt: '',
     notes: '',
