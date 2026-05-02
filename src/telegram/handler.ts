@@ -38,10 +38,6 @@ export async function handleTelegramWebhook(
       const msg = body.message;
       const chatId = msg.chat.id.toString();
       console.log(`💬 Message from chatId: ${chatId}, text: ${msg.text}`);
-      
-      // Immediate echo to confirm pipeline works
-      const { sendText } = await import("../webhook/sender");
-      await sendText(chatId, "✅ Care Setu received your message! Setting up your profile...").catch(e => console.error("Echo failed:", e));
 
       let internal: InternalMessage = {
         id: msg.message_id.toString(),
