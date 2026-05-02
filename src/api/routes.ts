@@ -4,6 +4,20 @@ import { sendMessage as sendAisensyMessage } from "../integrations/aisensy";
 import { wsManager } from "../websocket/manager";
 
 export async function registerApiRoutes(fastify: FastifyInstance) {
+  // DB diagnostics (production debug endpoint — remove after fix)
+  fastify.get("/diag/db", async (request, reply) => {
+    try {
+      const count = await prisma.patient.count();
+      return { ok: true, count };
+    } catch (error: any) {
+      return reply.status(500).send({
+        ok: false,
+        error: error?.message ?? String(error),
+        code: error?.code,
+      });
+    }
+  });
+
   // Get all patients
   fastify.get("/patients", async (request, reply) => {
     try {
