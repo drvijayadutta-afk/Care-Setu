@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cancer AI - Coordinator Dashboard",
+  title: "Care Setu - Coordinator Dashboard",
   description: "Monitor and manage cancer care patients",
 };
 

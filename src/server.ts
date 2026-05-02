@@ -98,7 +98,7 @@ async function start() {
       console.log(`🤖 Telegram webhook registered: ${backendUrl}/webhook/telegram`);
     }
 
-    console.log(`🚀 Cancer AI server running on port ${process.env.PORT || 3000}`);
+    console.log(`🚀 Care Setu server running on port ${process.env.PORT || 3000}`);
     console.log(`📱 WhatsApp webhook: /webhook`);
     console.log(`📊 API endpoints: /patients, /patients/:id, /patients/:id/conversations`);
     console.log(`⚙️  Workers: check-ins, appointments, doctor-signals`);
