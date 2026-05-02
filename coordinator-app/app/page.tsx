@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCoordinatorStore } from '@/lib/store';
+import { login } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,20 +19,13 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // Temporary: For demo, accept any email/password
-      // In production, this would call the backend API
-      if (email && password) {
-        const token = btoa(`${email}:${password}`);
-        localStorage.setItem('coordinator_token', token);
-        setAuthenticated(true);
-        setCoordinatorName(email.split('@')[0]);
-        router.push('/dashboard');
-      } else {
-        setError('Please enter email and password');
-      }
-    } catch (err) {
-      setError('Login failed. Please try again.');
-      console.error(err);
+      const { token, coordinator } = await login(email, password);
+      localStorage.setItem('coordinator_token', token);
+      setAuthenticated(true);
+      setCoordinatorName(coordinator.name);
+      router.push('/dashboard');
+    } catch {
+      setError('Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -53,23 +47,20 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Email
-            </label>
+            <label className="block text-sm font-medium text-gray-700">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="coordinator@example.com"
+              placeholder="coordinator@hospital.com"
               className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:outline-none"
               disabled={loading}
+              required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
+            <label className="block text-sm font-medium text-gray-700">Password</label>
             <input
               type="password"
               value={password}
@@ -77,6 +68,7 @@ export default function LoginPage() {
               placeholder="••••••••"
               className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:outline-none"
               disabled={loading}
+              required
             />
           </div>
 
@@ -85,13 +77,9 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full rounded-lg bg-indigo-600 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
-
-        <p className="mt-4 text-center text-sm text-gray-600">
-          Demo: Use any email and password
-        </p>
       </div>
     </div>
   );

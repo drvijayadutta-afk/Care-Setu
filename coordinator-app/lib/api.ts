@@ -258,6 +258,15 @@ export const healthCheck = async () => {
   }
 };
 
+// Auth
+export const login = async (email: string, password: string) => {
+  const { data } = await api.post('/auth/login', { email, password });
+  return data as {
+    token: string;
+    coordinator: { id: string; email: string; name: string; role: string; hospitalName?: string };
+  };
+};
+
 // ─── Lab Results ──────────────────────────────────────────────────────────────
 
 export const getPatientLabResults = async (patientId: string, category?: string) => {

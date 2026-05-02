@@ -7,11 +7,15 @@ require("dotenv/config");
 const fastify_1 = __importDefault(require("fastify"));
 const cors_1 = __importDefault(require("@fastify/cors"));
 const websocket_1 = __importDefault(require("@fastify/websocket"));
+const jwt_1 = __importDefault(require("@fastify/jwt"));
 const handler_1 = require("./webhook/handler");
+const handler_2 = require("./telegram/handler");
+const sender_1 = require("./telegram/sender");
 const workers_1 = require("./jobs/workers");
 const queue_1 = require("./jobs/queue");
 const aisensy_poller_1 = require("./integrations/aisensy-poller");
 const routes_1 = require("./api/routes");
+const auth_1 = require("./api/auth");
 const routes_2 = require("./websocket/routes");
 const fastify = (0, fastify_1.default)({
     logger: process.env.NODE_ENV !== "production",
@@ -24,6 +28,10 @@ fastify.get("/webhook", handler_1.handleWebhookVerification);
 fastify.post("/webhook", {
     config: { rawBody: true },
     handler: handler_1.handleWebhookMessage,
+});
+// Telegram incoming messages (POST)
+fastify.post("/webhook/telegram", {
+    handler: handler_2.handleTelegramWebhook,
 });
 // Schedule recurring cron jobs on startup
 async function scheduleCronJobs() {
@@ -46,13 +54,29 @@ function startAisensyPolling() {
 }
 async function start() {
     try {
-        // Add CORS support
-        await fastify.register(cors_1.default, {
-            origin: true,
+        // Add CORS support — restrict to known frontend origins
+        const allowedOrigins = process.env.ALLOWED_ORIGINS
+            ? process.env.ALLOWED_ORIGINS.split(",")
+            : ["http://localhost:3001", "http://localhost:3000"];
+        await fastify.register(cors_1.default, { origin: allowedOrigins });
+        // JWT authentication
+        await fastify.register(jwt_1.default, {
+            secret: process.env.JWT_SECRET || "dev-secret-change-in-production",
+        });
+        // Decorator used by protected routes
+        fastify.decorate("authenticate", async (request, reply) => {
+            try {
+                await request.jwtVerify();
+            }
+            catch {
+                reply.status(401).send({ error: "Unauthorized" });
+            }
         });
         // Add WebSocket support
         await fastify.register(websocket_1.default);
-        // Register API routes
+        // Auth routes (public — no JWT required)
+        await (0, auth_1.registerAuthRoutes)(fastify);
+        // Register API routes (protected inside via preHandler)
         await (0, routes_1.registerApiRoutes)(fastify);
         // Register WebSocket routes
         await (0, routes_2.registerWebSocketRoutes)(fastify);
@@ -62,7 +86,13 @@ async function start() {
         });
         await scheduleCronJobs();
         startAisensyPolling();
-        console.log(`🚀 Cancer AI server running on port ${process.env.PORT || 3000}`);
+        // Auto-register Telegram webhook if token is set
+        if (process.env.TELEGRAM_BOT_TOKEN) {
+            const backendUrl = process.env.BACKEND_URL || `https://care-setu-backend.onrender.com`;
+            await (0, sender_1.setWebhook)(backendUrl).catch((err) => console.error("Failed to set Telegram webhook:", err));
+            console.log(`🤖 Telegram webhook registered: ${backendUrl}/webhook/telegram`);
+        }
+        console.log(`🚀 Care Setu server running on port ${process.env.PORT || 3000}`);
         console.log(`📱 WhatsApp webhook: /webhook`);
         console.log(`📊 API endpoints: /patients, /patients/:id, /patients/:id/conversations`);
         console.log(`⚙️  Workers: check-ins, appointments, doctor-signals`);

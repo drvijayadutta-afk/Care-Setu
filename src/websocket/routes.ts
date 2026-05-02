@@ -8,17 +8,17 @@ export async function registerWebSocketRoutes(fastify: FastifyInstance) {
 
     // Validate patientId (in production, verify auth token and patient access)
     if (!patientId) {
-      connection.socket.close(1008, 'Invalid patient ID');
+      connection.close(1008, 'Invalid patient ID');
       return;
     }
 
     console.log(`WebSocket connection established for patient: ${patientId}`);
 
     // Subscribe to patient updates
-    wsManager.subscribe(patientId, connection.socket);
+    wsManager.subscribe(patientId, connection);
 
     // Send welcome message
-    connection.socket.send(
+    connection.send(
       JSON.stringify({
         type: 'connection',
         message: `Connected to real-time updates for patient ${patientId}`,
@@ -27,14 +27,14 @@ export async function registerWebSocketRoutes(fastify: FastifyInstance) {
     );
 
     // Handle incoming messages (for future use - heartbeat, commands, etc.)
-    connection.socket.on('message', (message) => {
+    connection.on('message', (message) => {
       try {
         const data = JSON.parse(message.toString());
         console.log(`Received message from ${patientId}:`, data);
 
         // Echo pong for ping
         if (data.type === 'ping') {
-          connection.socket.send(JSON.stringify({ type: 'pong', timestamp: new Date().toISOString() }));
+          connection.send(JSON.stringify({ type: 'pong', timestamp: new Date().toISOString() }));
         }
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);

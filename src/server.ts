@@ -2,6 +2,7 @@ import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
+import jwt from "@fastify/jwt";
 import {
   handleWebhookVerification,
   handleWebhookMessage,
@@ -17,6 +18,7 @@ import {
 import { doctorSignalQueue, checkinQueue } from "./jobs/queue";
 import { pollAisensyMessages } from "./integrations/aisensy-poller";
 import { registerApiRoutes } from "./api/routes";
+import { registerAuthRoutes } from "./api/auth";
 import { registerWebSocketRoutes } from "./websocket/routes";
 
 const fastify = Fastify({
@@ -67,15 +69,33 @@ function startAisensyPolling() {
 
 async function start() {
   try {
-    // Add CORS support
-    await fastify.register(cors, {
-      origin: true,
+    // Add CORS support — restrict to known frontend origins
+    const allowedOrigins = process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",")
+      : ["http://localhost:3001", "http://localhost:3000"];
+    await fastify.register(cors, { origin: allowedOrigins });
+
+    // JWT authentication
+    await fastify.register(jwt, {
+      secret: process.env.JWT_SECRET || "dev-secret-change-in-production",
+    });
+
+    // Decorator used by protected routes
+    fastify.decorate("authenticate", async (request: any, reply: any) => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        reply.status(401).send({ error: "Unauthorized" });
+      }
     });
 
     // Add WebSocket support
     await fastify.register(websocket);
 
-    // Register API routes
+    // Auth routes (public — no JWT required)
+    await registerAuthRoutes(fastify);
+
+    // Register API routes (protected inside via preHandler)
     await registerApiRoutes(fastify);
 
     // Register WebSocket routes
