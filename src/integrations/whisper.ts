@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import axios from "axios";
 import { TelegramApi } from "./telegram-api";
+import { getWhatsAppChannel, getTelegramChannel } from "../messaging/router";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -45,8 +46,8 @@ export async function transcribeVoiceNote(
 }
 
 async function downloadFromWhatsApp(mediaId: string): Promise<Buffer> {
-  const { downloadMediaUrl } = await import("../webhook/sender");
-  const mediaUrl = await downloadMediaUrl(mediaId);
+  const whatsapp = getWhatsAppChannel();
+  const mediaUrl = await whatsapp.downloadMediaUrl!(mediaId);
 
   const response = await axios.get(mediaUrl, {
     responseType: "arraybuffer",
