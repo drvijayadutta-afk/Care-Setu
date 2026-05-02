@@ -1,4 +1,4 @@
-import "dotenv/config";
+import { config } from "./config/env";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
@@ -22,7 +22,7 @@ import { registerAuthRoutes } from "./api/auth";
 import { registerWebSocketRoutes } from "./websocket/routes";
 
 const fastify = Fastify({
-  logger: process.env.NODE_ENV !== "production",
+  logger: config.nodeEnv !== "production",
 });
 
 // Health check
@@ -70,15 +70,10 @@ function startAisensyPolling() {
 async function start() {
   try {
     // Add CORS support — restrict to known frontend origins
-    const allowedOrigins = process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(",")
-      : ["http://localhost:3001", "http://localhost:3000"];
-    await fastify.register(cors, { origin: allowedOrigins });
+    await fastify.register(cors, { origin: config.allowedOrigins });
 
-    // JWT authentication
-    await fastify.register(jwt, {
-      secret: process.env.JWT_SECRET || "dev-secret-change-in-production",
-    });
+    // JWT authentication — secret validated at boot in src/config/env.ts
+    await fastify.register(jwt, { secret: config.jwtSecret });
 
     // Decorator used by protected routes
     fastify.decorate("authenticate", async (request: any, reply: any) => {
@@ -102,7 +97,7 @@ async function start() {
     await registerWebSocketRoutes(fastify);
 
     await fastify.listen({
-      port: parseInt(process.env.PORT || "3000"),
+      port: config.port,
       host: "0.0.0.0",
     });
 
@@ -118,7 +113,7 @@ async function start() {
       console.log(`🤖 Telegram webhook registered: ${backendUrl}/webhook/telegram`);
     }
 
-    console.log(`🚀 Care Setu server running on port ${process.env.PORT || 3000}`);
+    console.log(`🚀 Care Setu server running on port ${config.port}`);
     console.log(`📱 WhatsApp webhook: /webhook`);
     console.log(`📊 API endpoints: /patients, /patients/:id, /patients/:id/conversations`);
     console.log(`⚙️  Workers: check-ins, appointments, doctor-signals`);
