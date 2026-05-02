@@ -25,13 +25,34 @@ model Patient {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  checkins      Checkin[]
-  medications   Medication[]
-  appointments  Appointment[]
-  alerts        Alert[]
-  conversations Conversation[]
-  caregiver     Caregiver?
-  doctor        Doctor?        @relation(fields: [doctorId], references: [id])
+  // Clinical identity fields
+  dateOfBirth       DateTime?
+  gender            String?       // M, F, OTHER
+  stage             String?       // e.g., Stage IIIC, T2N1M0
+  diagnosisDate     DateTime?
+  primarySite       String?       // anatomical site of primary tumour
+  histology         String?       // e.g., Infiltrating Ductal Carcinoma
+  metastasisSites   String[]
+  ecogScore         Int?          // 0–4 performance status
+  bloodGroup        String?
+  allergies         String[]
+  comorbidities     String[]
+  smokingStatus     String?
+
+  checkins          Checkin[]
+  medications       Medication[]
+  appointments      Appointment[]
+  alerts            Alert[]
+  conversations     Conversation[]
+  caregiver         Caregiver?
+  doctor            Doctor?          @relation(fields: [doctorId], references: [id])
+  labResults        LabResult[]
+  imagingReports    ImagingReport[]
+  pathologyReports  PathologyReport[]
+  vitalSigns        VitalSign[]
+  clinicalNotes     ClinicalNote[]
+  documents         PatientDocument[]
+  careTeamMembers   CareTeamMember[]
 }
 
 model Caregiver {
@@ -70,6 +91,8 @@ model Checkin {
   notes          String?
   cycleDay       Int
   messageId      String?
+  ctcaeGrades    Json?    // { "nausea": 2, "fatigue": 1 } — CTCAE Grade 1–5 per symptom
+  ecogScore      Int?
   createdAt      DateTime @default(now())
 
   patient          Patient @relation(fields: [patientId], references: [id])
@@ -189,4 +212,153 @@ model CoordinatorTask {
   priority    String    @default("normal")
   createdAt   DateTime  @default(now())
   resolvedAt  DateTime?
+}
+
+// ─── Patient Record Storehouse Models ───────────────────────────────────────
+
+model LabResult {
+  id          String    @id @default(uuid())
+  patientId   String
+  testDate    DateTime
+  reportedAt  DateTime?
+  category    String    // CBC, LFT, KFT, TUMOUR_MARKER, COAGULATION, URINE, OTHER
+  testName    String
+  value       Float?
+  unit        String?
+  refMin      Float?
+  refMax      Float?
+  isAbnormal  Boolean   @default(false)
+  flag        String?   // HIGH, LOW, CRITICAL, NORMAL
+  rawText     String?
+  cycleNumber Int?
+  cycleDay    Int?
+  orderedBy   String?
+  source      String    @default("manual") // manual | pdf_extract | hl7 | fhir
+  documentId  String?
+  notes       String?
+  isDeleted   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+}
+
+model ImagingReport {
+  id          String    @id @default(uuid())
+  patientId   String
+  studyDate   DateTime
+  reportedAt  DateTime?
+  modality    String    // CT, MRI, PET-CT, X-RAY, ULTRASOUND, BONE-SCAN, MAMMOGRAPHY
+  bodyPart    String
+  indication  String?
+  findings    String?
+  impression  String?
+  response    String?   // RECIST: CR, PR, SD, PD
+  radiologist String?
+  referenceId String?
+  documentId  String?
+  source      String    @default("manual")
+  notes       String?
+  createdAt   DateTime  @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+}
+
+model PathologyReport {
+  id             String    @id @default(uuid())
+  patientId      String
+  reportDate     DateTime
+  specimenType   String    // BIOPSY, SURGICAL, CYTOLOGY, BONE_MARROW, BLOOD
+  site           String
+  diagnosis      String
+  grade          String?
+  stage          String?   // pathological stage e.g., pT2N1M0
+  margins        String?   // clear | involved | close
+  ihcFindings    Json?     // { "ER": "positive 80%", "HER2": "negative", "Ki67": "25%" }
+  molecularTests Json?     // { "BRCA1": "wildtype", "KRAS": "mutant codon 12" }
+  pathologist    String?
+  labName        String?
+  referenceId    String?
+  documentId     String?
+  source         String    @default("manual")
+  notes          String?
+  createdAt      DateTime  @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+}
+
+model VitalSign {
+  id          String    @id @default(uuid())
+  patientId   String
+  recordedAt  DateTime
+  weight      Float?    // kg
+  height      Float?    // cm
+  bmi         Float?
+  temperature Float?    // °C
+  bpSystolic  Int?
+  bpDiastolic Int?
+  pulseRate   Int?
+  oxygenSat   Float?    // SpO2 %
+  ecogScore   Int?      // 0–4
+  painScore   Int?      // 0–10
+  source      String    @default("manual") // manual | bot
+  cycleNumber Int?
+  cycleDay    Int?
+  createdAt   DateTime  @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+}
+
+model ClinicalNote {
+  id          String    @id @default(uuid())
+  patientId   String
+  noteDate    DateTime
+  noteType    String    // CONSULTATION, PROGRESS, DISCHARGE, MDT_DECISION, PROCEDURE, NURSING
+  title       String
+  content     String
+  authorName  String
+  authorRole  String    // ONCOLOGIST, COORDINATOR, NURSE, SOCIAL_WORKER, etc.
+  isPrivate   Boolean   @default(false)
+  cycleNumber Int?
+  tags        String[]
+  documentId  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id])
+}
+
+model PatientDocument {
+  id            String    @id @default(uuid())
+  patientId     String
+  documentDate  DateTime?
+  category      String    // LAB_REPORT, IMAGING, PATHOLOGY, PRESCRIPTION, DISCHARGE_SUMMARY, CONSENT, INSURANCE, OTHER
+  title         String
+  description   String?
+  storagePath   String    // Supabase storage path — never exposed as a public URL
+  fileType      String    // pdf | jpg | png | docx
+  fileSizeBytes Int?
+  uploadedBy    String?
+  isVerified    Boolean   @default(false)
+  extractedData Json?     // AI-extracted structured content
+  tags          String[]
+  createdAt     DateTime  @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+}
+
+model CareTeamMember {
+  id           String    @id @default(uuid())
+  patientId    String
+  role         String    // MEDICAL_ONCOLOGIST, RADIATION_ONCOLOGIST, SURGICAL_ONCOLOGIST,
+                         // PALLIATIVE, NURSE, DIETITIAN, PSYCHO_ONCOLOGIST, PHARMACIST, SOCIAL_WORKER
+  name         String
+  phone        String?
+  email        String?
+  hospitalName String?
+  department   String?
+  isPrimary    Boolean   @default(false)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
 }

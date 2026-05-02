@@ -28,8 +28,149 @@ export interface Patient {
   cancerType?: string;
   language?: string;
   onboardingStep: number;
+  treatmentProtocol?: string;
+  currentCycle?: number;
+  hospitalName?: string;
+  doctorName?: string;
+  // Clinical identity fields
+  dateOfBirth?: string;
+  gender?: string;
+  stage?: string;
+  diagnosisDate?: string;
+  primarySite?: string;
+  histology?: string;
+  metastasisSites?: string[];
+  ecogScore?: number;
+  bloodGroup?: string;
+  allergies?: string[];
+  comorbidities?: string[];
   createdAt: string;
   lastMessageAt?: string;
+}
+
+export interface LabResult {
+  id: string;
+  patientId: string;
+  testDate: string;
+  reportedAt?: string;
+  category: string;
+  testName: string;
+  value?: number;
+  unit?: string;
+  refMin?: number;
+  refMax?: number;
+  isAbnormal: boolean;
+  flag?: string;
+  rawText?: string;
+  cycleNumber?: number;
+  orderedBy?: string;
+  source: string;
+  documentId?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface ImagingReport {
+  id: string;
+  patientId: string;
+  studyDate: string;
+  reportedAt?: string;
+  modality: string;
+  bodyPart: string;
+  indication?: string;
+  findings?: string;
+  impression?: string;
+  response?: string;
+  radiologist?: string;
+  referenceId?: string;
+  documentId?: string;
+  source: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface PathologyReport {
+  id: string;
+  patientId: string;
+  reportDate: string;
+  specimenType: string;
+  site: string;
+  diagnosis: string;
+  grade?: string;
+  stage?: string;
+  margins?: string;
+  ihcFindings?: Record<string, string>;
+  molecularTests?: Record<string, string>;
+  pathologist?: string;
+  labName?: string;
+  documentId?: string;
+  source: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface VitalSign {
+  id: string;
+  patientId: string;
+  recordedAt: string;
+  weight?: number;
+  height?: number;
+  bmi?: number;
+  temperature?: number;
+  bpSystolic?: number;
+  bpDiastolic?: number;
+  pulseRate?: number;
+  oxygenSat?: number;
+  ecogScore?: number;
+  painScore?: number;
+  source: string;
+  cycleNumber?: number;
+  createdAt: string;
+}
+
+export interface ClinicalNote {
+  id: string;
+  patientId: string;
+  noteDate: string;
+  noteType: string;
+  title: string;
+  content: string;
+  authorName: string;
+  authorRole: string;
+  isPrivate: boolean;
+  cycleNumber?: number;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PatientDocument {
+  id: string;
+  patientId: string;
+  documentDate?: string;
+  category: string;
+  title: string;
+  description?: string;
+  fileType: string;
+  fileSizeBytes?: number;
+  isVerified: boolean;
+  tags: string[];
+  uploadedBy?: string;
+  createdAt: string;
+}
+
+export interface CareTeamMember {
+  id: string;
+  patientId: string;
+  role: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  hospitalName?: string;
+  department?: string;
+  isPrimary: boolean;
+  isActive: boolean;
+  createdAt: string;
 }
 
 export interface Conversation {
@@ -115,6 +256,140 @@ export const healthCheck = async () => {
   } catch {
     return false;
   }
+};
+
+// ─── Lab Results ──────────────────────────────────────────────────────────────
+
+export const getPatientLabResults = async (patientId: string, category?: string) => {
+  const url = `/patients/${patientId}/lab-results${category ? `?category=${category}` : ''}`;
+  const { data } = await api.get(url);
+  return data as LabResult[];
+};
+
+export const createLabResult = async (patientId: string, result: Partial<LabResult>) => {
+  const { data } = await api.post(`/patients/${patientId}/lab-results`, result);
+  return data as LabResult;
+};
+
+export const bulkCreateLabResults = async (patientId: string, results: Partial<LabResult>[]) => {
+  const { data } = await api.post(`/patients/${patientId}/lab-results/bulk`, { results });
+  return data as { created: number };
+};
+
+// ─── Imaging ──────────────────────────────────────────────────────────────────
+
+export const getPatientImaging = async (patientId: string) => {
+  const { data } = await api.get(`/patients/${patientId}/imaging`);
+  return data as ImagingReport[];
+};
+
+export const createImagingReport = async (patientId: string, report: Partial<ImagingReport>) => {
+  const { data } = await api.post(`/patients/${patientId}/imaging`, report);
+  return data as ImagingReport;
+};
+
+// ─── Pathology ────────────────────────────────────────────────────────────────
+
+export const getPatientPathology = async (patientId: string) => {
+  const { data } = await api.get(`/patients/${patientId}/pathology`);
+  return data as PathologyReport[];
+};
+
+export const createPathologyReport = async (patientId: string, report: Partial<PathologyReport>) => {
+  const { data } = await api.post(`/patients/${patientId}/pathology`, report);
+  return data as PathologyReport;
+};
+
+// ─── Vitals ───────────────────────────────────────────────────────────────────
+
+export const getPatientVitals = async (patientId: string) => {
+  const { data } = await api.get(`/patients/${patientId}/vitals`);
+  return data as VitalSign[];
+};
+
+export const createVitalSign = async (patientId: string, vital: Partial<VitalSign>) => {
+  const { data } = await api.post(`/patients/${patientId}/vitals`, vital);
+  return data as VitalSign;
+};
+
+// ─── Clinical Notes ───────────────────────────────────────────────────────────
+
+export const getPatientClinicalNotes = async (patientId: string, type?: string) => {
+  const url = `/patients/${patientId}/clinical-notes${type ? `?type=${type}` : ''}`;
+  const { data } = await api.get(url);
+  return data as ClinicalNote[];
+};
+
+export const createClinicalNote = async (patientId: string, note: Partial<ClinicalNote>) => {
+  const { data } = await api.post(`/patients/${patientId}/clinical-notes`, note);
+  return data as ClinicalNote;
+};
+
+// ─── Documents ────────────────────────────────────────────────────────────────
+
+export const getPatientDocuments = async (patientId: string) => {
+  const { data } = await api.get(`/patients/${patientId}/documents`);
+  return data as PatientDocument[];
+};
+
+export const initiateDocumentUpload = async (
+  patientId: string,
+  payload: { category: string; fileType: string; title: string; description?: string }
+) => {
+  const { data } = await api.post(`/patients/${patientId}/documents/upload-url`, payload);
+  return data as { uploadUrl: string; documentId: string };
+};
+
+export const confirmDocumentUpload = async (
+  documentId: string,
+  payload: { fileSizeBytes?: number; uploadedBy?: string; documentDate?: string }
+) => {
+  const { data } = await api.patch(`/documents/${documentId}`, payload);
+  return data as PatientDocument;
+};
+
+export const getDocumentDownloadUrl = async (documentId: string) => {
+  const { data } = await api.get(`/documents/${documentId}/download-url`);
+  return data as { downloadUrl: string; title: string; fileType: string };
+};
+
+export const extractDocument = async (documentId: string) => {
+  const { data } = await api.post(`/documents/${documentId}/extract`);
+  return data;
+};
+
+export const deleteDocument = async (documentId: string) => {
+  const { data } = await api.delete(`/documents/${documentId}`);
+  return data;
+};
+
+// ─── Care Team ────────────────────────────────────────────────────────────────
+
+export const getCareTeam = async (patientId: string) => {
+  const { data } = await api.get(`/patients/${patientId}/care-team`);
+  return data as CareTeamMember[];
+};
+
+export const addCareTeamMember = async (patientId: string, member: Partial<CareTeamMember>) => {
+  const { data } = await api.post(`/patients/${patientId}/care-team`, member);
+  return data as CareTeamMember;
+};
+
+export const updateCareTeamMember = async (memberId: string, updates: Partial<CareTeamMember>) => {
+  const { data } = await api.patch(`/care-team/${memberId}`, updates);
+  return data as CareTeamMember;
+};
+
+export const removeCareTeamMember = async (memberId: string) => {
+  const { data } = await api.delete(`/care-team/${memberId}`);
+  return data;
+};
+
+// ─── MDT Summary ──────────────────────────────────────────────────────────────
+
+export const getMdtSummary = async (patientId: string) => {
+  const { data } = await api.get(`/patients/${patientId}/mdt-summary`);
+  return data as { summary: string };
 };
 
 export default api;

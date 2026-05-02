@@ -23,6 +23,7 @@
     "@fastify/websocket": "^11.2.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@supabase/supabase-js": "^2.105.1",
     "@types/pg": "^8.20.0",
     "axios": "^1.15.2",
     "bullmq": "^5.76.4",
