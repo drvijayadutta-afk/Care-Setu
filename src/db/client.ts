@@ -1,22 +1,50 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createPrismaClient() {
   const isProduction = process.env.NODE_ENV === "production";
-  const adapter = new PrismaPg({
+
+  // Use a pg Pool with keepAlive to prevent P1017 on Render free tier
+  // Render PostgreSQL closes idle connections — keepAlive prevents this
+  const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    // Accept Supabase's self-signed certificate chain in production
-    // IPv4 is forced via NODE_OPTIONS=--dns-result-order=ipv4first on Render
-    ...(isProduction && { ssl: { rejectUnauthorized: false } }),
+    max: 5,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
+    ...(isProduction && {
+      ssl: { rejectUnauthorized: false }
+    }),
   });
+
+  // Log pool errors so they appear in Render logs
+  pool.on("error", (err) => {
+    console.error("⚠️ DB pool error:", err.message);
+  });
+
+  const adapter = new PrismaPg(pool);
+
   return new PrismaClient({
     adapter,
     log: isProduction ? ["error"] : ["error", "warn"],
   });
 }
 
-export const prisma = globalForPrisma.prisma || createPrismaClient();
+// Singleton with auto-reconnect wrapper
+function getPrismaClient() {
+  if (globalForPrisma.prisma) return globalForPrisma.prisma;
+  const client = createPrismaClient();
+  globalForPrisma.prisma = client;
+  return client;
+}
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+export const prisma = getPrismaClient();
+
+// Graceful disconnect on shutdown
+process.on("beforeExit", async () => {
+  await prisma.$disconnect();
+});
