@@ -54,11 +54,15 @@ export async function handleTelegramWebhook(
         internal.type = "audio";
         internal.audio = { id: audio.file_id, mime_type: audio.mime_type || "audio/ogg" };
       } else {
-        // Unsupported message type — skip
         return;
       }
 
-      await processMessage(internal);
+      await processMessage(internal).catch(async (err) => {
+        console.error("❌ processMessage error:", err?.message || err);
+        // Always send fallback so user knows bot is alive
+        const { sendText } = await import("../webhook/sender");
+        await sendText(chatId, "🙏 Welcome to Care Setu! We are setting up your profile. Please send your name to get started.").catch(() => {});
+      });
     }
 
     // Handle button clicks (callback queries)
