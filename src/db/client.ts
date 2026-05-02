@@ -1,50 +1,41 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createPrismaClient() {
-  const isProduction = process.env.NODE_ENV === "production";
+  const dbUrl = process.env.DATABASE_URL || "";
 
-  // Use a pg Pool with keepAlive to prevent P1017 on Render free tier
-  // Render PostgreSQL closes idle connections — keepAlive prevents this
+  // Render internal URLs have no domain suffix — no SSL needed
+  // External URLs contain .render.com or .supabase.co — need SSL
+  const needsSsl = dbUrl.includes(".render.com") ||
+                   dbUrl.includes(".supabase.co") ||
+                   dbUrl.includes("supabase");
+
+  console.log(`🔌 DB connecting... SSL: ${needsSsl ? "YES" : "NO (internal)"}`);
+
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 5,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    connectionString: dbUrl,
+    max: 3,
+    idleTimeoutMillis: 60000,
+    connectionTimeoutMillis: 15000,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
-    ...(isProduction && {
-      ssl: { rejectUnauthorized: false }
-    }),
+    ...(needsSsl && { ssl: { rejectUnauthorized: false } }),
   });
 
-  // Log pool errors so they appear in Render logs
   pool.on("error", (err) => {
-    console.error("⚠️ DB pool error:", err.message);
+    console.error("⚠️  DB pool error:", err.message);
+  });
+
+  pool.on("connect", () => {
+    console.log("✅ DB pool connected");
   });
 
   const adapter = new PrismaPg(pool);
-
-  return new PrismaClient({
-    adapter,
-    log: isProduction ? ["error"] : ["error", "warn"],
-  });
+  return new PrismaClient({ adapter, log: ["error"] });
 }
 
-// Singleton with auto-reconnect wrapper
-function getPrismaClient() {
-  if (globalForPrisma.prisma) return globalForPrisma.prisma;
-  const client = createPrismaClient();
-  globalForPrisma.prisma = client;
-  return client;
-}
-
-export const prisma = getPrismaClient();
-
-// Graceful disconnect on shutdown
-process.on("beforeExit", async () => {
-  await prisma.$disconnect();
-});
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
