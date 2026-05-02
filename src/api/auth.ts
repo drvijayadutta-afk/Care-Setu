@@ -4,10 +4,17 @@ import { prisma } from "../db/client";
 import { config } from "../config/env";
 
 export async function registerAuthRoutes(fastify: FastifyInstance) {
-  // POST /auth/login — rate limited by global Fastify rate-limit plugin (5 attempts per 15 minutes).
-  // TODO: override to stricter config via @fastify/rate-limit { store } option once Redis available.
+  // POST /auth/login — rate limited to configured attempts per 15 minutes (default 5, keyed by IP)
   fastify.post<{ Body: { email?: string; password?: string } }>(
     "/auth/login",
+    {
+      config: {
+        rateLimit: {
+          max: config.loginRateLimit,
+          timeWindow: 15 * 60 * 1000, // 15 minutes, same as global window
+        },
+      },
+    },
     async (request, reply) => {
     const { email, password } = request.body as { email?: string; password?: string };
 
