@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../db/client";
-import { markRead } from "./sender";
+import { getWhatsAppChannel } from "../messaging/router";
 import { classifyIntent } from "../ai/intents";
 import { handleCheckinResponse } from "../modules/checkin/engine";
 import { handleAppointmentRequest } from "../modules/appointments/booking";
@@ -83,7 +83,8 @@ export async function processMessage(message: WhatsAppMessage, phoneNumberId: st
   const from = message.from;
   const messageId = message.id;
 
-  await markRead(messageId).catch(() => {});
+  const whatsapp = getWhatsAppChannel();
+  await whatsapp.markRead?.(messageId).catch(() => {});
 
   // Check if sender is a caregiver
   const caregiver = await prisma.caregiver.findUnique({
@@ -102,13 +103,13 @@ export async function processMessage(message: WhatsAppMessage, phoneNumberId: st
 
   // New patient — start onboarding
   if (!patient) {
-    await handleOnboarding(from, null, extractText(message) || "");
+    await handleOnboarding({ whatsappNumber: from }, null, extractText(message) || "");
     return;
   }
 
   // Patient mid-onboarding
   if (patient.onboardingStep < 9) {
-    await handleOnboarding(from, patient, extractText(message) || "");
+    await handleOnboarding({ whatsappNumber: from }, patient, extractText(message) || "");
     return;
   }
 

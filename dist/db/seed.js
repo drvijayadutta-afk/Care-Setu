@@ -82,14 +82,15 @@ const protocols = [
     },
 ];
 // ─── Demo Patients ────────────────────────────────────────────────────────────
-async function seedPatients() {
+async function seedPatients(coordinatorId) {
     const today = new Date();
     const daysAgo = (n) => new Date(today.getTime() - n * 86400000);
     // ── Patient 1: Breast Cancer — Stage IIIA, Cycle 3 ──────────────────────────
     const p1 = await client_1.prisma.patient.upsert({
         where: { whatsappNumber: "971501234001" },
-        update: {},
+        update: { assignedCoordinatorId: coordinatorId },
         create: {
+            assignedCoordinatorId: coordinatorId,
             whatsappNumber: "971501234001",
             name: "Nadia Al-Mansoori",
             language: "en",
@@ -261,8 +262,9 @@ async function seedPatients() {
     // ── Patient 2: Colorectal Cancer — Stage IIB, Cycle 6 ───────────────────────
     const p2 = await client_1.prisma.patient.upsert({
         where: { whatsappNumber: "971501234002" },
-        update: {},
+        update: { assignedCoordinatorId: coordinatorId },
         create: {
+            assignedCoordinatorId: coordinatorId,
             whatsappNumber: "971501234002",
             name: "Rajesh Menon",
             language: "en",
@@ -385,8 +387,9 @@ async function seedPatients() {
     // ── Patient 3: Cervical Cancer — Stage IB2, Cycle 2 ─────────────────────────
     const p3 = await client_1.prisma.patient.upsert({
         where: { whatsappNumber: "971501234003" },
-        update: {},
+        update: { assignedCoordinatorId: coordinatorId },
         create: {
+            assignedCoordinatorId: coordinatorId,
             whatsappNumber: "971501234003",
             name: "Sarah Mitchell",
             language: "en",
@@ -581,8 +584,10 @@ async function main() {
     }
     console.log("\n🌱 Seeding coordinator account...");
     await seedCoordinator();
+    const coordinatorEmail = process.env.SEED_COORDINATOR_EMAIL || "coordinator@caresetu.health";
+    const coordinator = await client_1.prisma.coordinator.findUniqueOrThrow({ where: { email: coordinatorEmail } });
     console.log("\n🌱 Seeding demo patients...");
-    await seedPatients();
+    await seedPatients(coordinator.id);
     console.log("\n✅ Seed complete.\n");
 }
 main()

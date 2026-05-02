@@ -1,5 +1,5 @@
 import { prisma } from "../../db/client";
-import { sendText, sendButtonMessage } from "../../webhook/sender";
+import { messagingRouter } from "../../messaging/router";
 import { askClaudeJSON } from "../../integrations/claude";
 import { CHECKIN_EXTRACTOR_PROMPT } from "../../ai/prompts";
 import { evaluateThresholds } from "../symptoms/thresholds";
@@ -29,7 +29,7 @@ export async function sendCheckinMessage(
 
   const message = buildCheckinMessage(patient, cycleDay, type, yesterday?.score ?? null);
 
-  await sendButtonMessage(patient.whatsappNumber, message, [
+  await messagingRouter.sendButtons(patient.id, message, [
     { id: "checkin_1", title: "😰 Very Hard (1)" },
     { id: "checkin_2", title: "😔 Hard (2)" },
     { id: "checkin_3", title: "😐 Okay (3)" },
@@ -112,8 +112,8 @@ export async function handleCheckinResponse(
   }
 
   if (score === null) {
-    await sendText(
-      patient.whatsappNumber,
+    await messagingRouter.sendText(
+      patient.id,
       patient.language === "hi"
         ? "1 से 5 के बीच बताइए — 1 बहुत मुश्किल, 5 अच्छा। या अपनी बात बताइए।"
         : "Please tell me 1–5 (1 = very hard, 5 = good), or describe how you're feeling."
@@ -168,7 +168,7 @@ async function sendCheckinResponse(
         ? `${name} जी, आपने बताया — शुक्रिया। 💙\n\nआज बहुत मुश्किल है। ये real है — इसे feel करना ज़रूरी नहीं कि आप कमज़ोर हैं।\n\n${getSymptomGuidance(symptoms, lang)}\n\nआपके caregiver को inform कर दिया है। आपको कुछ नहीं करना।\n\n4 घंटे में दोबारा पूछूँगा। 🙏`
         : `Thank you for telling me, ${name}. 💙\n\nToday is very hard. That's real — feeling this doesn't mean you are weak.\n\n${getSymptomGuidance(symptoms, lang)}\n\nYour caregiver has been notified. You don't need to do anything.\n\nI'll check back in 4 hours. 🙏`;
 
-    await sendText(patient.whatsappNumber, msg);
+    await messagingRouter.sendText(patient.id, msg);
 
   } else if (score === 2) {
     const msg =
@@ -176,7 +176,7 @@ async function sendCheckinResponse(
         ? `${name} जी। 🙏\n\nमुश्किल है, पर आप handle कर रहे हैं — यही काफी है।\n\n${getSymptomGuidance(symptoms, lang)}\n\nबाद में और पूछूँगा।`
         : `${name}. 🙏\n\nIt's hard, but you are managing — that's enough for now.\n\n${getSymptomGuidance(symptoms, lang)}\n\nI'll check in again later.`;
 
-    await sendText(patient.whatsappNumber, msg);
+    await messagingRouter.sendText(patient.id, msg);
 
   } else if (score === 3) {
     const msg =
@@ -184,7 +184,7 @@ async function sendCheckinResponse(
         ? `ठीक है — समझ आया। ${name} जी, okay होना भी एक जीत है।\n${symptoms.length > 0 ? `\n${getSymptomGuidance(symptoms, lang)}` : ""}\nकल और बेहतर हो। 💙`
         : `Okay — noted. ${name}, being okay is its own victory.\n${symptoms.length > 0 ? `\n${getSymptomGuidance(symptoms, lang)}` : ""}\nHere's to a better day tomorrow. 💙`;
 
-    await sendText(patient.whatsappNumber, msg);
+    await messagingRouter.sendText(patient.id, msg);
 
   } else {
     const msg =
@@ -192,7 +192,7 @@ async function sendCheckinResponse(
         ? `${score === 5 ? "बढ़िया!" : "अच्छा!"} ${name} जी — ये सुनकर अच्छा लगा। 😊\nइस energy को बचाकर रखें। 💙`
         : `${score === 5 ? "Great!" : "Good to hear,"} ${name}! 😊\nSave that energy — you'll need it. 💙`;
 
-    await sendText(patient.whatsappNumber, msg);
+    await messagingRouter.sendText(patient.id, msg);
   }
 
   // Additional emotional support if flagged
@@ -202,7 +202,7 @@ async function sendCheckinResponse(
       lang === "hi"
         ? "अगर आप बात करना चाहते हैं — मन में जो भी है — बस लिखें। मैं यहाँ हूँ।"
         : "If you want to talk — whatever's on your mind — just write. I'm here.";
-    await sendText(patient.whatsappNumber, supportMsg);
+    await messagingRouter.sendText(patient.id, supportMsg);
   }
 }
 

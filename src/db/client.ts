@@ -1,19 +1,28 @@
 import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { config } from "../config/env";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createPrismaClient() {
   const dbUrl = process.env.DATABASE_URL || "";
 
-  // Render internal URLs have no domain suffix — no SSL needed
-  // External URLs contain .render.com or .supabase.co — need SSL
-  const needsSsl = dbUrl.includes(".render.com") ||
-                   dbUrl.includes(".supabase.co") ||
-                   dbUrl.includes("supabase");
+  // Determine SSL requirement based on DATABASE_SSL config
+  let needsSsl = false;
+  if (config.databaseSsl === "require") {
+    needsSsl = true;
+  } else if (config.databaseSsl === "disable") {
+    needsSsl = false;
+  } else {
+    // auto-detect: Render internal URLs have no domain suffix — no SSL needed
+    // External URLs contain .render.com or .supabase.co — need SSL
+    needsSsl = dbUrl.includes(".render.com") ||
+               dbUrl.includes(".supabase.co") ||
+               dbUrl.includes("supabase");
+  }
 
-  console.log(`🔌 DB connecting... SSL: ${needsSsl ? "YES" : "NO (internal)"}`);
+  console.log(`🔌 DB connecting... SSL: ${needsSsl ? "YES" : "NO"} (${config.databaseSsl})`);
 
   const pool = new Pool({
     connectionString: dbUrl,

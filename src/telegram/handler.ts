@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../db/client";
-import { sendText, sendButtonMessage, markRead } from "../webhook/sender";
+import { messagingRouter, getTelegramChannel } from "../messaging/router";
 import { classifyIntent } from "../ai/intents";
 import { handleCheckinResponse } from "../modules/checkin/engine";
 import { handleAppointmentRequest } from "../modules/appointments/booking";
@@ -63,9 +63,10 @@ export async function handleTelegramWebhook(
       } catch (err: any) {
         console.error("❌ processMessage failed:", err?.message || err);
         // Fallback reply so user is never left hanging
-        await sendText(chatId,
-          "🙏 *Welcome to Care Setu!*\n\nI'm your cancer care companion. Please send \"Hello\" to begin your registration."
-        ).catch((e) => console.error("Fallback send failed:", e));
+        const tgChannel = getTelegramChannel();
+        await tgChannel
+          .sendText({ kind: "telegram", chatId }, "🙏 *Welcome to Care Setu!*\n\nI'm your cancer care companion. Please send \"Hello\" to begin your registration.")
+          .catch((e) => console.error("Fallback send failed:", e));
       }
     }
 
@@ -98,12 +99,10 @@ export async function handleTelegramWebhook(
 }
 
 async function processMessage(message: InternalMessage) {
-  const from = message.from;
+  const from = message.from; // Telegram chatId
   const messageId = message.id;
 
-  await markRead(messageId).catch(() => {}); // no-op for Telegram
-
-  // Check if sender is a caregiver
+  // Check if sender is a caregiver (look up by whatsappNumber, not telegramChatId for now)
   const caregiver = await prisma.caregiver.findUnique({
     where: { whatsappNumber: from },
     include: { patient: true },
@@ -115,22 +114,22 @@ async function processMessage(message: InternalMessage) {
     return;
   }
 
-  // Find or handle new patient
+  // Find patient by telegramChatId (Telegram users)
   let patient = await prisma.patient.findUnique({
-    where: { whatsappNumber: from },
+    where: { telegramChatId: from },
   }).catch(() => null);
 
   // New patient — start onboarding
   if (!patient) {
-    console.log(`🆕 New user ${from} — starting onboarding`);
-    await handleOnboarding(from, null, extractText(message) || "");
+    console.log(`🆕 New Telegram user ${from} — starting onboarding`);
+    await handleOnboarding({ telegramChatId: from }, null, extractText(message) || "");
     return;
   }
 
   // Patient mid-onboarding
   if (patient.onboardingStep < 9) {
     console.log(`🔄 User ${from} onboarding step ${patient.onboardingStep}`);
-    await handleOnboarding(from, patient, extractText(message) || "");
+    await handleOnboarding({ telegramChatId: from }, patient, extractText(message) || "");
     return;
   }
 
@@ -141,7 +140,7 @@ async function processMessage(message: InternalMessage) {
   if (message.type === "audio" && message.audio) {
     isVoiceNote = true;
     const { transcribeVoiceNote } = await import("../integrations/whisper");
-    text = await transcribeVoiceNote(message.audio.id, patient.language).catch(() => null);
+    text = await transcribeVoiceNote(message.audio.id, patient.language, "telegram").catch(() => null);
     if (!text) return;
   }
 

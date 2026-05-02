@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# .git hook: after every commit, scan the message for bible task tags
+# (e.g., [S1], [H2], [P1.4]) and update BIBLE.md accordingly.
+#
+# Enable for this clone:
+#   git config core.hooksPath scripts/git-hooks
+#
+# Design:
+#   - Tags are read from the SUBJECT LINE ONLY (the script enforces this).
+#   - When BIBLE.md changes, we make a SEPARATE follow-up commit
+#     "chore(bible): ...". We never amend the work commit, because amending
+#     would change its SHA (breaking the SHA we just wrote into BIBLE.md)
+#     and would also re-trigger this hook in a loop.
+#   - The follow-up commit's subject starts with "chore(bible):", and the
+#     guard below skips it on the next hook fire — so no loop.
+#   - Fail-soft: never blocks a commit, even if Node is missing or the
+#     script errors.
+
+set +e
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+[ -z "$REPO_ROOT" ] && exit 0
+
+SCRIPT="$REPO_ROOT/scripts/update-bible.mjs"
+[ ! -f "$SCRIPT" ] && exit 0
+
+# Skip our own follow-up commits — prevents loops.
+LAST_SUBJECT="$(git log -1 --format=%s)"
+case "$LAST_SUBJECT" in
+  "chore(bible):"*) exit 0 ;;
+esac
+
+WORK_SHA="$(git rev-parse --short HEAD)"
+
+node "$SCRIPT" --from-commit=HEAD >/dev/null 2>&1 || true
+
+# If BIBLE.md was modified, create a follow-up commit (NOT an amend).
+if ! git diff --quiet -- BIBLE.md 2>/dev/null; then
+  git add BIBLE.md
+  git commit --no-verify -m "chore(bible): mark tasks done from $WORK_SHA" >/dev/null 2>&1 || true
+fi
+
+exit 0

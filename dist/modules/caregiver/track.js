@@ -4,7 +4,7 @@ exports.handleCaregiverMessage = handleCaregiverMessage;
 exports.sendCaregiverMorningBrief = sendCaregiverMorningBrief;
 exports.sendCaregiverWeeklyCheck = sendCaregiverWeeklyCheck;
 const client_1 = require("../../db/client");
-const sender_1 = require("../../webhook/sender");
+const router_1 = require("../../messaging/router");
 const claude_1 = require("../../integrations/claude");
 const prompts_1 = require("../../ai/prompts");
 // Called when caregiver sends any message
@@ -17,14 +17,14 @@ async function handleCaregiverMessage(caregiver, text, rawMessage) {
                 where: { id: caregiver.id },
                 data: { isEnrolled: true },
             });
-            await (0, sender_1.sendText)(caregiver.whatsappNumber, `धन्यवाद! 🙏 आप ${patient.name} जी के care companion से जुड़ गए हैं।\n\nरोज़ सुबह 6:30 बजे मैं आपको ${patient.name} जी का हाल बताऊँगा।\nज़रूरत पड़ने पर तुरंत inform करूँगा।\n\nअगर कोई सवाल हो — बस message करें। 💙`);
+            await router_1.messagingRouter.sendText(caregiver.whatsappNumber, `धन्यवाद! 🙏 आप ${patient.name} जी के care companion से जुड़ गए हैं।\n\nरोज़ सुबह 6:30 बजे मैं आपको ${patient.name} जी का हाल बताऊँगा।\nज़रूरत पड़ने पर तुरंत inform करूँगा।\n\nअगर कोई सवाल हो — बस message करें। 💙`, true);
             // Notify patient
-            await (0, sender_1.sendText)(patient.whatsappNumber, patient.language === "hi"
+            await router_1.messagingRouter.sendText(patient.id, patient.language === "hi"
                 ? `${patient.name.split(" ")[0]} जी — आपके caregiver ${caregiver.name} जी जुड़ गए हैं। 💙 अब वो भी आपके updates पाएँगे।`
                 : `${patient.name.split(" ")[0]} — your caregiver ${caregiver.name} has joined. 💙 They'll now receive your updates.`);
         }
         else {
-            await (0, sender_1.sendText)(caregiver.whatsappNumber, `Join करने के लिए "हाँ" या "Yes" टाइप करें।`);
+            await router_1.messagingRouter.sendText(caregiver.whatsappNumber, `Join करने के लिए "हाँ" या "Yes" टाइप करें।`, true);
         }
         return;
     }
@@ -50,11 +50,11 @@ async function handleCaregiverMessage(caregiver, text, rawMessage) {
     // Check if it's a wellbeing response (for caregiver's own check-in)
     const lowerText = text.toLowerCase();
     if (lowerText.match(/^(thak|tired|exhaust|nahi|not ok|mushkil|hard|stressed|bura|bad)/)) {
-        await (0, sender_1.sendText)(caregiver.whatsappNumber, `Sunna tha. Aap bahut kuch uthaa rahe hain. 💙\n\nYe zaroor yaad rakhein — agar aap thak jaate hain, to unki care bhi mushkil hogi. Thodi der apne liye bhi lena — bilkul sahi hai.\n\nKya kuch specific hai jo bahut heavy lag raha hai abhi?`);
+        await router_1.messagingRouter.sendText(caregiver.whatsappNumber, `Sunna tha. Aap bahut kuch uthaa rahe hain. 💙\n\nYe zaroor yaad rakhein — agar aap thak jaate hain, to unki care bhi mushkil hogi. Thodi der apne liye bhi lena — bilkul sahi hai.\n\nKya kuch specific hai jo bahut heavy lag raha hai abhi?`, true);
         return;
     }
     // General reply — acknowledge
-    await (0, sender_1.sendText)(caregiver.whatsappNumber, `Shukriya message karne ke liye. 💙 Kya kuch specific help chahiye?`);
+    await router_1.messagingRouter.sendText(caregiver.whatsappNumber, `Shukriya message karne ke liye. 💙 Kya kuch specific help chahiye?`, true);
 }
 async function handleCaregiverSymptomReport(caregiver, patient, text) {
     // Apply the same threshold logic but from caregiver perspective
@@ -78,13 +78,13 @@ async function handleCaregiverSymptomReport(caregiver, patient, text) {
     const cycleDay = getCycleDay(patient.cycleStartDate, patient.currentCycle);
     // Send threshold guidance back to caregiver
     if (detectedSymptoms.includes("fever") || detectedSymptoms.includes("breathing_difficulty")) {
-        await (0, sender_1.sendText)(caregiver.whatsappNumber, `⚠️ Ye symptoms check karna zaruri hai.\n\n• Agar fever 38°C se upar hai → aaj hi hospital le jaayein\n• Agar sans lene mein takleef hai → ABHI hospital ya ambulance call karein\n\nHospital: aapka registered hospital\nCare team: ${process.env.COORDINATOR_WHATSAPP_NUMBER || "registered number"}`);
+        await router_1.messagingRouter.sendText(caregiver.whatsappNumber, `⚠️ Ye symptoms check karna zaruri hai.\n\n• Agar fever 38°C se upar hai → aaj hi hospital le jaayein\n• Agar sans lene mein takleef hai → ABHI hospital ya ambulance call karein\n\nHospital: aapka registered hospital\nCare team: ${process.env.COORDINATOR_WHATSAPP_NUMBER || "registered number"}`, true);
     }
     else if (detectedSymptoms.includes("vomiting")) {
-        await (0, sender_1.sendText)(caregiver.whatsappNumber, `Ulti ho rahi hai — dehydration se bachna zaroori hai.\n\n• Thoda thoda paani ya ORS dete rahen\n• Agar 6 ghante se zyada ho → care team ko call karein\n• Dawai ke saath khaana khilaane ki koshish karein`);
+        await router_1.messagingRouter.sendText(caregiver.whatsappNumber, `Ulti ho rahi hai — dehydration se bachna zaroori hai.\n\n• Thoda thoda paani ya ORS dete rahen\n• Agar 6 ghante se zyada ho → care team ko call karein\n• Dawai ke saath khaana khilaane ki koshish karein`, true);
     }
     else {
-        await (0, sender_1.sendText)(caregiver.whatsappNumber, `Samjha. Symptoms note kar liye.\n\nKya abhi unka score kya lagta hai (1 bahut mushkil se 5 theek) agar aap rate karein?`);
+        await router_1.messagingRouter.sendText(caregiver.whatsappNumber, `Samjha. Symptoms note kar liye.\n\nKya abhi unka score kya lagta hai (1 bahut mushkil se 5 theek) agar aap rate karein?`, true);
     }
     // Also create a note on the patient's record
     await client_1.prisma.alert.create({
@@ -119,7 +119,7 @@ async function sendCaregiverMorningBrief(patientId) {
     const dayProfiles = protocol?.dayProfiles || [];
     const todayProfile = dayProfiles.find((d) => d.day === cycleDay || (d.dayRange && cycleDay >= d.dayRange[0] && cycleDay <= d.dayRange[1])) || { description: "Monitoring day", expectedSymptoms: [] };
     const brief = await (0, claude_1.askClaude)((0, prompts_1.CAREGIVER_BRIEF_PROMPT)(patient.name, patient.caregiver.name, cycleDay, patient.treatmentProtocol, yesterday?.score ?? null, yesterday?.symptoms ?? [], todayProfile), "Generate the morning brief now.", 256);
-    await (0, sender_1.sendText)(patient.caregiver.whatsappNumber, brief);
+    await router_1.messagingRouter.sendText(patient.caregiver.whatsappNumber, brief, true);
     await client_1.prisma.caregiverConversation.create({
         data: {
             caregiverId: patient.caregiver.id,
@@ -145,7 +145,7 @@ async function sendCaregiverWeeklyCheck(patientId) {
     const hardDays = checkins.filter((c) => c.score <= 2).length;
     const weeksInCare = Math.floor((Date.now() - new Date(patient.createdAt).getTime()) / (1000 * 60 * 60 * 24 * 7));
     const msg = `Aap ${weeksInCare} hafte se is safar mein hain. Ye asaan nahi hai. 💙\n\nIs hafte ${patient.name} ke:\n✅ ${goodDays} achhe din\n${hardDays > 0 ? `😔 ${hardDays} mushkil din` : ""}\n\nAapne sab sambhala. Ye chhota nahi hai.\n\nKya kuch hai jo abhi bahut heavy lag raha hai?\nMujhe batayein — ye baat sirf hamare beech hai.`;
-    await (0, sender_1.sendText)(patient.caregiver.whatsappNumber, msg);
+    await router_1.messagingRouter.sendText(patient.caregiver.whatsappNumber, msg, true);
 }
 function getCycleDay(cycleStartDate, currentCycle) {
     const now = new Date();

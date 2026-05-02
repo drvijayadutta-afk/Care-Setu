@@ -9,6 +9,8 @@ datasource db {
 model Patient {
   id                String   @id @default(uuid())
   whatsappNumber    String   @unique
+  telegramChatId    String?  @unique
+  preferredMessagingChannel String? // "whatsapp" or "telegram"; detected from env if not set
   name              String
   language          String   @default("hi")
   cancerType        String
@@ -39,6 +41,9 @@ model Patient {
   comorbidities     String[]
   smokingStatus     String?
 
+  assignedCoordinatorId String?
+  assignedCoordinator   Coordinator?     @relation(fields: [assignedCoordinatorId], references: [id])
+
   checkins          Checkin[]
   medications       Medication[]
   appointments      Appointment[]
@@ -53,6 +58,7 @@ model Patient {
   clinicalNotes     ClinicalNote[]
   documents         PatientDocument[]
   careTeamMembers   CareTeamMember[]
+  extractedDrafts   ExtractedRecordDraft[]
 }
 
 model Caregiver {
@@ -212,6 +218,8 @@ model Coordinator {
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
+
+  patients     Patient[]
 }
 
 model CoordinatorTask {
@@ -371,6 +379,21 @@ model CareTeamMember {
   isPrimary    Boolean   @default(false)
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+}
+
+model ExtractedRecordDraft {
+  id            String    @id @default(uuid())
+  patientId     String
+  documentId    String
+  category      String    // LAB_REPORT, IMAGING, PATHOLOGY
+  extractedData Json      // AI-extracted structured content awaiting review
+  status        String    @default("pending") // pending | approved | rejected
+  rejectionReason String?
+  reviewedAt    DateTime?
+  reviewedBy    String?   // Coordinator ID who approved/rejected
+  createdAt     DateTime  @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id])
 }

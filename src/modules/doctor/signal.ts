@@ -1,5 +1,5 @@
 import { prisma } from "../../db/client";
-import { sendText } from "../../webhook/sender";
+import { messagingRouter } from "../../messaging/router";
 import { askClaudeJSON } from "../../integrations/claude";
 import { WEEKLY_SIGNAL_PROMPT } from "../../ai/prompts";
 
@@ -111,5 +111,5 @@ async function sendSignalForDoctor(
   const body = signalLines.join("\n\n");
   const footer = `\nReply with patient name to see full check-in log.`;
 
-  await sendText(whatsappNumber, `${header}\n\n${body}${footer}`);
+  await messagingRouter.sendText(whatsappNumber, `${header}\n\n${body}${footer}`, true);
 }

@@ -35,7 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleAppointmentRequest = handleAppointmentRequest;
 const client_1 = require("../../db/client");
-const sender_1 = require("../../webhook/sender");
+const router_1 = require("../../messaging/router");
 const claude_1 = require("../../integrations/claude");
 const Practo = __importStar(require("../../integrations/practo"));
 const Apollo = __importStar(require("../../integrations/apollo"));
@@ -50,14 +50,14 @@ async function handleAppointmentRequest(patient, text, preExtractedType) {
         return;
     }
     if (text === "appt_different_date") {
-        await (0, sender_1.sendText)(patient.whatsappNumber, patient.language === "hi"
+        await router_1.messagingRouter.sendText(patient.id, patient.language === "hi"
             ? "Kaunsi date prefer karenge? (Jaise: '20 May' ya 'agle hafte')"
             : "What date would you prefer? (e.g., '20 May' or 'next week')");
         return;
     }
     if (text === "appt_cancel") {
         pendingBookings.delete(patient.whatsappNumber);
-        await (0, sender_1.sendText)(patient.whatsappNumber, patient.language === "hi"
+        await router_1.messagingRouter.sendText(patient.id, patient.language === "hi"
             ? "Theek hai — appointment booking cancel kiya. Jab zarurat ho, bata dena."
             : "Okay — appointment booking cancelled. Let me know when you need it.");
         return;
@@ -81,7 +81,7 @@ Respond with JSON only.`, text, 64);
 }
 async function fetchAndPresentSlots(patient, intent) {
     const lang = patient.language;
-    await (0, sender_1.sendText)(patient.whatsappNumber, lang === "hi"
+    await router_1.messagingRouter.sendText(patient.id, lang === "hi"
         ? "Ek second — available slots dhundh raha hun... 🔍"
         : "One moment — looking for available slots... 🔍");
     // Look up doctor in DB
@@ -115,7 +115,7 @@ async function fetchAndPresentSlots(patient, intent) {
     if (slots.length === 0) {
         // Fallback: create coordinator task and notify patient
         await createCoordinatorBookingTask(patient, intent);
-        await (0, sender_1.sendText)(patient.whatsappNumber, lang === "hi"
+        await router_1.messagingRouter.sendText(patient.id, lang === "hi"
             ? `${patient.doctorName} ke saath appointment book kar raha hun.\nHum 2 ghante mein confirm karenge. 📅\n\nAapko koi kuch nahi karna — hum batayenge.`
             : `Booking an appointment with ${patient.doctorName}.\nWe'll confirm within 2 hours. 📅\n\nYou don't need to do anything — we'll let you know.`);
         return;
@@ -133,25 +133,25 @@ async function fetchAndPresentSlots(patient, intent) {
     const bodyText = lang === "hi"
         ? `${patient.doctorName} ke saath available slots:\n(${patient.hospitalName})`
         : `Available slots with ${patient.doctorName}:\n(${patient.hospitalName})`;
-    await (0, sender_1.sendListMessage)(patient.whatsappNumber, bodyText, "Select a slot", [
+    await router_1.messagingRouter.sendList(patient.id, bodyText, "Select a slot", [
         { title: "Available Times", rows },
     ]);
 }
 async function confirmBooking(patient, slotIndex) {
     const pending = pendingBookings.get(patient.whatsappNumber);
     if (!pending) {
-        await (0, sender_1.sendText)(patient.whatsappNumber, patient.language === "hi"
+        await router_1.messagingRouter.sendText(patient.id, patient.language === "hi"
             ? "Session expire ho gaya. Dobara try karein."
             : "Session expired. Please try again.");
         return;
     }
     const slot = pending.slots[slotIndex];
     if (!slot) {
-        await (0, sender_1.sendText)(patient.whatsappNumber, "Invalid slot. Please try again.");
+        await router_1.messagingRouter.sendText(patient.id, "Invalid slot. Please try again.");
         return;
     }
     const lang = patient.language;
-    await (0, sender_1.sendText)(patient.whatsappNumber, lang === "hi" ? "Book kar raha hun... ⏳" : "Booking your appointment... ⏳");
+    await router_1.messagingRouter.sendText(patient.id, lang === "hi" ? "Book kar raha hun... ⏳" : "Booking your appointment... ⏳");
     let bookingId = null;
     let practoBookingId = null;
     let apolloBookingId = null;
@@ -176,7 +176,7 @@ async function confirmBooking(patient, slotIndex) {
     catch (err) {
         console.error("Booking API failed:", err);
         await createCoordinatorBookingTask(patient, pending.intent, slot);
-        await (0, sender_1.sendText)(patient.whatsappNumber, lang === "hi"
+        await router_1.messagingRouter.sendText(patient.id, lang === "hi"
             ? "Booking confirm ho rahi hai — thodi der mein update milega. 📅"
             : "Booking is being confirmed — you'll get an update shortly. 📅");
         pendingBookings.delete(patient.whatsappNumber);
@@ -202,11 +202,11 @@ async function confirmBooking(patient, slotIndex) {
     const confirmMsg = lang === "hi"
         ? `✅ Appointment confirm ho gaya!\n\n👨‍⚕️ ${slot.doctorName || patient.doctorName}\n🏥 ${patient.hospitalName}\n📅 ${formatAppointmentDate(scheduledAt)}\n\nMaine note kar liya. Reminders milenge:\n• Kal (48 ghante pehle)\n• Din par (24 ghante pehle)\n• 2 ghante pehle\n\nAapke caregiver ko bhi bata diya. 💙`
         : `✅ Appointment confirmed!\n\n👨‍⚕️ ${slot.doctorName || patient.doctorName}\n🏥 ${patient.hospitalName}\n📅 ${formatAppointmentDate(scheduledAt)}\n\nI've noted this. You'll get reminders:\n• Tomorrow (48 hours before)\n• Day of (24 hours before)\n• 2 hours before\n\nYour caregiver has been notified too. 💙`;
-    await (0, sender_1.sendText)(patient.whatsappNumber, confirmMsg);
+    await router_1.messagingRouter.sendText(patient.id, confirmMsg);
     // Notify caregiver
     const caregiver = await client_1.prisma.caregiver.findUnique({ where: { patientId: patient.id } });
     if (caregiver?.isEnrolled) {
-        await (0, sender_1.sendText)(caregiver.whatsappNumber, `📅 ${patient.name} ka appointment book ho gaya:\n${slot.doctorName || patient.doctorName} — ${patient.hospitalName}\n${formatAppointmentDate(scheduledAt)}`);
+        await router_1.messagingRouter.sendText(caregiver.whatsappNumber, `📅 ${patient.name} ka appointment book ho gaya:\n${slot.doctorName || patient.doctorName} — ${patient.hospitalName}\n${formatAppointmentDate(scheduledAt)}`, true);
     }
     // Schedule reminders
     await scheduleAppointmentReminders(appointment.id, patient.id, scheduledAt);
@@ -239,7 +239,7 @@ async function createCoordinatorBookingTask(patient, intent, preferredSlot) {
     });
     // Alert coordinator
     if (process.env.COORDINATOR_WHATSAPP_NUMBER) {
-        await (0, sender_1.sendText)(process.env.COORDINATOR_WHATSAPP_NUMBER, `📋 BOOKING TASK\nPatient: ${patient.name} (${patient.whatsappNumber})\nDoctor: ${patient.doctorName} @ ${patient.hospitalName}\nType: ${intent.type} | Urgency: ${intent.urgency}\n\nPlease call to book and update system.`);
+        await router_1.messagingRouter.sendText(process.env.COORDINATOR_WHATSAPP_NUMBER, `📋 BOOKING TASK\nPatient: ${patient.name} (${patient.whatsappNumber})\nDoctor: ${patient.doctorName} @ ${patient.hospitalName}\nType: ${intent.type} | Urgency: ${intent.urgency}\n\nPlease call to book and update system.`, true);
     }
 }
 function getDateFrom(urgency, preferredDate) {

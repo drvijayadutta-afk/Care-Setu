@@ -5,7 +5,7 @@ exports.sendMedicationReminder = sendMedicationReminder;
 exports.handleMedicationResponse = handleMedicationResponse;
 exports.handleMedicationQuery = handleMedicationQuery;
 const client_1 = require("../../db/client");
-const sender_1 = require("../../webhook/sender");
+const router_1 = require("../../messaging/router");
 // Pre-loaded context for common cancer medications
 const MEDICATION_CONTEXTS = {
     ondansetron: {
@@ -69,7 +69,7 @@ async function sendMedicationContext(patientId, medicationId) {
     const msg = lang === "hi"
         ? `💊 *${medication.name}* ke baare mein:\n\n*Kya karta hai:* ${context.purpose}\n\n*Kab lein:* ${context.timing}\n\n*Normal side effects:*\n${context.sideEffects.map((s) => `• ${s}`).join("\n")}\n\n*Dhyan rakhein:*\n${context.watchFor.map((w) => `• ${w}`).join("\n")}`
         : `💊 About *${medication.name}*:\n\n*What it does:* ${context.purpose}\n\n*When to take:* ${context.timing}\n\n*Normal side effects:*\n${context.sideEffects.map((s) => `• ${s}`).join("\n")}\n\n*Watch for:*\n${context.watchFor.map((w) => `• ${w}`).join("\n")}`;
-    await (0, sender_1.sendText)(patient.whatsappNumber, msg);
+    await router_1.messagingRouter.sendText(patient.id, msg);
     await client_1.prisma.medication.update({
         where: { id: medicationId },
         data: { contextSent: true },
@@ -89,7 +89,7 @@ async function sendMedicationReminder(patientId) {
         const reminderMsg = lang === "hi"
             ? `💊 *${med.name}* — lene ka waqt.\n_${med.purpose.split(".")[0]}._`
             : `💊 *${med.name}* — time to take it.\n_${med.purpose.split(".")[0]}._`;
-        await (0, sender_1.sendButtonMessage)(patient.whatsappNumber, reminderMsg, [
+        await router_1.messagingRouter.sendButtons(patient.id, reminderMsg, [
             { id: `med_taken_${med.id}`, title: "✅ Le liya" },
             { id: `med_skip_${med.id}`, title: "⏭ Baad mein" },
             { id: `med_question_${med.id}`, title: "❓ Sawaal hai" },
@@ -102,14 +102,14 @@ async function handleMedicationResponse(patient, replyId) {
         await client_1.prisma.medicationLog.create({
             data: { medicationId: medId, patientId: patient.id, taken: true, takenAt: new Date() },
         });
-        await (0, sender_1.sendText)(patient.whatsappNumber, patient.language === "hi" ? "✅ Note kar liya. Shukriya!" : "✅ Noted. Thank you!");
+        await router_1.messagingRouter.sendText(patient.id, patient.language === "hi" ? "✅ Note kar liya. Shukriya!" : "✅ Noted. Thank you!");
     }
     else if (replyId.startsWith("med_skip_")) {
         const medId = replyId.replace("med_skip_", "");
         await client_1.prisma.medicationLog.create({
             data: { medicationId: medId, patientId: patient.id, taken: false },
         });
-        await (0, sender_1.sendText)(patient.whatsappNumber, patient.language === "hi"
+        await router_1.messagingRouter.sendText(patient.id, patient.language === "hi"
             ? "Samjha. Isko aaj lena mat bhoolein — kal ke liye remind karunga."
             : "Understood. Try not to miss it today — I'll remind you tomorrow.");
     }
@@ -119,14 +119,14 @@ async function handleMedicationQuery(patient, text) {
         where: { patientId: patient.id, isActive: true },
     });
     if (medications.length === 0) {
-        await (0, sender_1.sendText)(patient.whatsappNumber, patient.language === "hi"
+        await router_1.messagingRouter.sendText(patient.id, patient.language === "hi"
             ? "Aapki dawaiyon ki list abhi add nahi hui hai. Apne care coordinator se contact karein."
             : "Your medication list hasn't been added yet. Please contact your care coordinator.");
         return;
     }
     const medList = medications.map((m) => `• ${m.name} — ${m.timing}`).join("\n");
     const lang = patient.language;
-    await (0, sender_1.sendText)(patient.whatsappNumber, lang === "hi"
+    await router_1.messagingRouter.sendText(patient.id, lang === "hi"
         ? `Aapki dawaiyan:\n\n${medList}\n\nKisi specific dawai ke baare mein poochhna hai? Naam likh kar bhejein.`
         : `Your medications:\n\n${medList}\n\nWant to know about a specific one? Just type the name.`);
 }

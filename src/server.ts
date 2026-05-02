@@ -1,8 +1,9 @@
-import "dotenv/config";
+import { config } from "./config/env";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import jwt from "@fastify/jwt";
+import rateLimit from "@fastify/rate-limit";
 import {
   handleWebhookVerification,
   handleWebhookMessage,
@@ -20,9 +21,20 @@ import { pollAisensyMessages } from "./integrations/aisensy-poller";
 import { registerApiRoutes } from "./api/routes";
 import { registerAuthRoutes } from "./api/auth";
 import { registerWebSocketRoutes } from "./websocket/routes";
+import { requirePatientAccess } from "./api/middleware/patient-scope";
+import { PatientRepository } from "./repositories/patient.repo";
+import { CoordinatorRepository } from "./repositories/coordinator.repo";
+import { ConversationRepository } from "./repositories/conversation.repo";
+import { RecordRepository } from "./repositories/record.repo";
+import type {
+  IPatientRepository,
+  ICoordinatorRepository,
+  IConversationRepository,
+  IRecordRepository,
+} from "./repositories/types";
 
 const fastify = Fastify({
-  logger: process.env.NODE_ENV !== "production",
+  logger: config.nodeEnv !== "production",
 });
 
 // Health check
@@ -33,7 +45,6 @@ fastify.get("/webhook", handleWebhookVerification);
 
 // WhatsApp incoming messages (POST)
 fastify.post("/webhook", {
-  config: { rawBody: true },
   handler: handleWebhookMessage,
 });
 
@@ -70,15 +81,16 @@ function startAisensyPolling() {
 async function start() {
   try {
     // Add CORS support — restrict to known frontend origins
-    const allowedOrigins = process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(",")
-      : ["http://localhost:3001", "http://localhost:3000"];
-    await fastify.register(cors, { origin: allowedOrigins });
+    await fastify.register(cors, { origin: config.allowedOrigins });
 
-    // JWT authentication
-    await fastify.register(jwt, {
-      secret: process.env.JWT_SECRET || "dev-secret-change-in-production",
+    // Rate limiting — 15-minute windows, configurable per endpoint
+    await fastify.register(rateLimit, {
+      max: 100, // global default, overridden per route
+      timeWindow: 15 * 60 * 1000, // 15 minutes
     });
+
+    // JWT authentication — secret validated at boot in src/config/env.ts
+    await fastify.register(jwt, { secret: config.jwtSecret });
 
     // Decorator used by protected routes
     fastify.decorate("authenticate", async (request: any, reply: any) => {
@@ -88,6 +100,20 @@ async function start() {
         reply.status(401).send({ error: "Unauthorized" });
       }
     });
+
+    // Decorator for patient-scoped authorization
+    fastify.decorate("requirePatientAccess", requirePatientAccess);
+
+    // Composition root — instantiate repositories and inject as decorators
+    const patientRepo: IPatientRepository = new PatientRepository();
+    const coordinatorRepo: ICoordinatorRepository = new CoordinatorRepository();
+    const conversationRepo: IConversationRepository = new ConversationRepository();
+    const recordRepo: IRecordRepository = new RecordRepository();
+
+    fastify.decorate("patientRepo", patientRepo);
+    fastify.decorate("coordinatorRepo", coordinatorRepo);
+    fastify.decorate("conversationRepo", conversationRepo);
+    fastify.decorate("recordRepo", recordRepo);
 
     // Add WebSocket support
     await fastify.register(websocket);
@@ -102,7 +128,7 @@ async function start() {
     await registerWebSocketRoutes(fastify);
 
     await fastify.listen({
-      port: parseInt(process.env.PORT || "3000"),
+      port: config.port,
       host: "0.0.0.0",
     });
 
@@ -118,7 +144,7 @@ async function start() {
       console.log(`🤖 Telegram webhook registered: ${backendUrl}/webhook/telegram`);
     }
 
-    console.log(`🚀 Care Setu server running on port ${process.env.PORT || 3000}`);
+    console.log(`🚀 Care Setu server running on port ${config.port}`);
     console.log(`📱 WhatsApp webhook: /webhook`);
     console.log(`📊 API endpoints: /patients, /patients/:id, /patients/:id/conversations`);
     console.log(`⚙️  Workers: check-ins, appointments, doctor-signals`);

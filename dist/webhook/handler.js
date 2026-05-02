@@ -4,7 +4,7 @@ exports.handleWebhookVerification = handleWebhookVerification;
 exports.handleWebhookMessage = handleWebhookMessage;
 exports.processMessage = processMessage;
 const client_1 = require("../db/client");
-const sender_1 = require("./sender");
+const router_1 = require("../messaging/router");
 const intents_1 = require("../ai/intents");
 const engine_1 = require("../modules/checkin/engine");
 const booking_1 = require("../modules/appointments/booking");
@@ -55,7 +55,8 @@ async function handleWebhookMessage(request, reply) {
 async function processMessage(message, phoneNumberId) {
     const from = message.from;
     const messageId = message.id;
-    await (0, sender_1.markRead)(messageId).catch(() => { });
+    const whatsapp = (0, router_1.getWhatsAppChannel)();
+    await whatsapp.markRead?.(messageId).catch(() => { });
     // Check if sender is a caregiver
     const caregiver = await client_1.prisma.caregiver.findUnique({
         where: { whatsappNumber: from },
@@ -70,12 +71,12 @@ async function processMessage(message, phoneNumberId) {
     let patient = await client_1.prisma.patient.findUnique({ where: { whatsappNumber: from } });
     // New patient — start onboarding
     if (!patient) {
-        await (0, flow_1.handleOnboarding)(from, null, extractText(message) || "");
+        await (0, flow_1.handleOnboarding)({ whatsappNumber: from }, null, extractText(message) || "");
         return;
     }
     // Patient mid-onboarding
     if (patient.onboardingStep < 9) {
-        await (0, flow_1.handleOnboarding)(from, patient, extractText(message) || "");
+        await (0, flow_1.handleOnboarding)({ whatsappNumber: from }, patient, extractText(message) || "");
         return;
     }
     // Get message text (handle voice notes)
