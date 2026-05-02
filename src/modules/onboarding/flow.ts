@@ -84,6 +84,29 @@ export async function handleOnboarding(
 }
 
 async function sendStep1_Language(whatsappNumber: string) {
+  // Save patient FIRST before sending message
+  // If DB fails we know immediately before confusing the user
+  try {
+    await prisma.patient.upsert({
+      where: { whatsappNumber },
+      update: { onboardingStep: 1 },
+      create: {
+        whatsappNumber,
+        onboardingStep: 1,
+        name: "",
+        cancerType: "",
+        treatmentProtocol: "",
+        cycleStartDate: new Date(),
+        hospitalName: "",
+        doctorName: "",
+      },
+    });
+    console.log(`✅ Patient record created for ${whatsappNumber}`);
+  } catch (err: any) {
+    console.error(`❌ Failed to create patient record: ${err?.message}`);
+    // Still send the buttons — we will retry upsert on next message
+  }
+
   await sendButtonMessage(
     whatsappNumber,
     GREETINGS.en,
@@ -93,22 +116,6 @@ async function sendStep1_Language(whatsappNumber: string) {
       { id: "lang_mr", title: "मराठी" },
     ]
   );
-
-  // Create placeholder patient record
-  await prisma.patient.upsert({
-    where: { whatsappNumber },
-    update: { onboardingStep: 1 },
-    create: {
-      whatsappNumber,
-      onboardingStep: 1,
-      name: "",
-      cancerType: "",
-      treatmentProtocol: "",
-      cycleStartDate: new Date(),
-      hospitalName: "",
-      doctorName: "",
-    },
-  });
 }
 
 async function processLanguage(
