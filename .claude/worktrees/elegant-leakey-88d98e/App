@@ -1,0 +1,78 @@
+name: Deploy to Render
+
+on:
+  workflow_dispatch:
+    inputs:
+      redis_url:
+        description: 'Redis URL (from Upstash)'
+        required: true
+        type: string
+      whatsapp_phone_id:
+        description: 'WhatsApp Phone Number ID'
+        required: true
+        type: string
+      whatsapp_access_token:
+        description: 'WhatsApp Access Token'
+        required: true
+        type: password
+      whatsapp_verify_token:
+        description: 'WhatsApp Verify Token (any string)'
+        required: true
+        type: string
+      whatsapp_api_version:
+        description: 'WhatsApp API Version'
+        required: false
+        default: 'v21.0'
+        type: string
+      anthropic_api_key:
+        description: 'Anthropic API Key'
+        required: true
+        type: password
+      openai_api_key:
+        description: 'OpenAI API Key'
+        required: true
+        type: password
+      coordinator_phone:
+        description: 'Coordinator WhatsApp Number'
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Render
+        run: |
+          SERVICE_RESPONSE=$(curl -s -X POST https://api.render.com/v1/services \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "web_service",
+              "name": "care-setu-backend",
+              "repo": "https://github.com/drvijayadutta-afk/Care-Setu",
+              "branch": "main",
+              "buildCommand": "npm install && npm run build && npx prisma migrate deploy",
+              "startCommand": "npm start",
+              "envVars": [
+                {"key": "NODE_ENV", "value": "production"},
+                {"key": "PORT", "value": "3000"},
+                {"key": "REDIS_URL", "value": "${{ github.event.inputs.redis_url }}"},
+                {"key": "WHATSAPP_PHONE_NUMBER_ID", "value": "${{ github.event.inputs.whatsapp_phone_id }}"},
+                {"key": "WHATSAPP_ACCESS_TOKEN", "value": "${{ github.event.inputs.whatsapp_access_token }}"},
+                {"key": "WHATSAPP_VERIFY_TOKEN", "value": "${{ github.event.inputs.whatsapp_verify_token }}"},
+                {"key": "WHATSAPP_API_VERSION", "value": "${{ github.event.inputs.whatsapp_api_version }}"},
+                {"key": "ANTHROPIC_API_KEY", "value": "${{ github.event.inputs.anthropic_api_key }}"},
+                {"key": "OPENAI_API_KEY", "value": "${{ github.event.inputs.openai_api_key }}"},
+                {"key": "COORDINATOR_WHATSAPP_NUMBER", "value": "${{ github.event.inputs.coordinator_phone }}"}
+              ]
+            }')
+          
+          SERVICE_ID=$(echo "$SERVICE_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+          [ -z "$SERVICE_ID" ] && { echo "Failed"; exit 1; }
+          echo "✅ Service created: $SERVICE_ID"
+          sleep 5
+          curl -s -X POST https://api.render.com/v1/services/$SERVICE_ID/deploys \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_TOKEN }}" \
+            -H "Content-Type: application/json"
+          echo "✅ Deployment triggered!"

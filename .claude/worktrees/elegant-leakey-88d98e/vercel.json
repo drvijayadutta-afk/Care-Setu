@@ -1,0 +1,7 @@
+{
+  "buildCommand": "npm --prefix coordinator-app run build",
+  "installCommand": "npm --prefix coordinator-app install",
+  "outputDirectory": "coordinator-app/.next",
+  "framework": "nextjs",
+  "regions": ["iad1"]
+}

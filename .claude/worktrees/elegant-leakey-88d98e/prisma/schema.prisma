@@ -1,0 +1,192 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Patient {
+  id                String   @id @default(uuid())
+  whatsappNumber    String   @unique
+  name              String
+  language          String   @default("hi")
+  cancerType        String
+  treatmentProtocol String
+  currentCycle      Int      @default(1)
+  cycleStartDate    DateTime
+  hospitalName      String
+  doctorName        String
+  doctorId          String?
+  isActive          Boolean  @default(true)
+  onboardingStep    Int      @default(0)
+  onboardingData    Json?
+  personalNotes     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  checkins      Checkin[]
+  medications   Medication[]
+  appointments  Appointment[]
+  alerts        Alert[]
+  conversations Conversation[]
+  caregiver     Caregiver?
+  doctor        Doctor?        @relation(fields: [doctorId], references: [id])
+}
+
+model Caregiver {
+  id                String   @id @default(uuid())
+  whatsappNumber    String   @unique
+  name              String
+  relationToPatient String
+  patientId         String   @unique
+  isEnrolled        Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  patient       Patient                 @relation(fields: [patientId], references: [id])
+  conversations CaregiverConversation[]
+}
+
+model Doctor {
+  id             String    @id @default(uuid())
+  whatsappNumber String    @unique
+  name           String
+  hospitalName   String
+  specialization String    @default("Oncology")
+  practoId       String?
+  apolloId       String?
+  isOptedIn      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  patients Patient[]
+}
+
+model Checkin {
+  id             String   @id @default(uuid())
+  patientId      String
+  score          Int
+  symptoms       String[]
+  emotionalState String?
+  notes          String?
+  cycleDay       Int
+  messageId      String?
+  createdAt      DateTime @default(now())
+
+  patient          Patient @relation(fields: [patientId], references: [id])
+  alertsTriggered  Alert[]
+}
+
+model Medication {
+  id           String   @id @default(uuid())
+  patientId    String
+  name         String
+  genericName  String?
+  purpose      String
+  frequency    String
+  timing       String
+  sideEffects  String[]
+  watchFor     String[]
+  contextSent  Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  patient       Patient          @relation(fields: [patientId], references: [id])
+  adherenceLogs MedicationLog[]
+}
+
+model MedicationLog {
+  id           String    @id @default(uuid())
+  medicationId String
+  patientId    String
+  taken        Boolean
+  takenAt      DateTime?
+  createdAt    DateTime  @default(now())
+
+  medication Medication @relation(fields: [medicationId], references: [id])
+}
+
+model Appointment {
+  id              String   @id @default(uuid())
+  patientId       String
+  doctorId        String?
+  doctorName      String
+  hospitalName    String
+  type            String
+  scheduledAt     DateTime
+  status          String   @default("pending")
+  practoBookingId String?
+  apolloBookingId String?
+  manualBooking   Boolean  @default(false)
+  prepNotesSent   Boolean  @default(false)
+  briefSent       Boolean  @default(false)
+  postVisitSent   Boolean  @default(false)
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+}
+
+model Alert {
+  id                   String    @id @default(uuid())
+  patientId            String
+  checkinId            String?
+  type                 String
+  severity             String
+  message              String
+  caregiverNotified    Boolean   @default(false)
+  coordinatorNotified  Boolean   @default(false)
+  doctorNotified       Boolean   @default(false)
+  resolved             Boolean   @default(false)
+  resolvedAt           DateTime?
+  createdAt            DateTime  @default(now())
+
+  patient Patient  @relation(fields: [patientId], references: [id])
+  checkin Checkin? @relation(fields: [checkinId], references: [id])
+}
+
+model Conversation {
+  id          String   @id @default(uuid())
+  patientId   String
+  role        String
+  messageType String
+  content     String
+  isNightMode Boolean  @default(false)
+  intent      String?
+  createdAt   DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+}
+
+model CaregiverConversation {
+  id          String   @id @default(uuid())
+  caregiverId String
+  role        String
+  content     String
+  createdAt   DateTime @default(now())
+
+  caregiver Caregiver @relation(fields: [caregiverId], references: [id])
+}
+
+model TreatmentProtocol {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  displayName String
+  cancerTypes String[]
+  totalCycles Int
+  cycleDays   Int
+  dayProfiles Json
+  medications Json
+  createdAt   DateTime @default(now())
+}
+
+model CoordinatorTask {
+  id          String    @id @default(uuid())
+  patientId   String
+  type        String
+  description String
+  context     Json?
+  status      String    @default("open")
+  priority    String    @default("normal")
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+}

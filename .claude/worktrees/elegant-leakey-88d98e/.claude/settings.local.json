@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__df6a98cc-4146-4049-9504-a202704d8ae6__get_deployment_build_logs"
+    ]
+  }
+}
