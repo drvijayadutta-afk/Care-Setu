@@ -14,6 +14,12 @@ const envSchema = z.object({
     .transform((v) =>
       v ? v.split(",").map((s) => s.trim()).filter(Boolean) : ["http://localhost:3001", "http://localhost:3000"]
     ),
+  // Set to "true" to enforce patient-scope 403s; default is log-only mode during rollout
+  PATIENT_SCOPE_ENFORCE: z
+    .string()
+    .optional()
+    .transform((v) => v === "true")
+    .default(false),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -67,6 +73,7 @@ export const config = {
   port: env.PORT,
   jwtSecret: resolveJwtSecret(),
   allowedOrigins: env.ALLOWED_ORIGINS,
+  patientScopeEnforce: env.PATIENT_SCOPE_ENFORCE,
 } as const;
 
 export type AppConfig = typeof config;

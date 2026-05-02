@@ -39,6 +39,9 @@ model Patient {
   comorbidities     String[]
   smokingStatus     String?
 
+  assignedCoordinatorId String?
+  assignedCoordinator   Coordinator?     @relation(fields: [assignedCoordinatorId], references: [id])
+
   checkins          Checkin[]
   medications       Medication[]
   appointments      Appointment[]
@@ -212,6 +215,8 @@ model Coordinator {
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
+
+  patients     Patient[]
 }
 
 model CoordinatorTask {

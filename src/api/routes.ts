@@ -5,10 +5,13 @@ import { wsManager } from "../websocket/manager";
 import { generateUploadUrl, generateDownloadUrl, deleteFile } from "../integrations/supabase-storage";
 import { extractDocumentData } from "../integrations/claude";
 import { generateMdtSummary } from "../integrations/claude";
+import { requirePatientAccess } from "./middleware/patient-scope";
 
 export async function registerApiRoutes(fastify: FastifyInstance) {
   // Shorthand so every route can add preHandler: [auth]
   const auth = [(fastify as any).authenticate];
+  // For routes scoped to a specific patient (:id param) — auth + ownership check
+  const authScope = [...auth, requirePatientAccess];
 
   // DB diagnostics (public — used by Render health checks)
   fastify.get("/diag/db", async (request, reply) => {
@@ -39,7 +42,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   });
 
   // Get single patient
-  fastify.get("/patients/:id", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id", { preHandler: authScope }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const patient = await prisma.patient.findUnique({
@@ -58,7 +61,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   });
 
   // Get patient conversations
-  fastify.get("/patients/:id/conversations", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/conversations", { preHandler: authScope }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const conversations = await prisma.conversation.findMany({
@@ -75,7 +78,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   });
 
   // Get patient check-ins
-  fastify.get("/patients/:id/checkins", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/checkins", { preHandler: authScope }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const checkins = await prisma.checkin.findMany({
@@ -92,7 +95,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   });
 
   // Get patient appointments
-  fastify.get("/patients/:id/appointments", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/appointments", { preHandler: authScope }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const appointments = await prisma.appointment.findMany({
@@ -109,7 +112,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   });
 
   // Send message to patient
-  fastify.post("/patients/:id/send-message", { preHandler: auth }, async (request, reply) => {
+  fastify.post("/patients/:id/send-message", { preHandler: authScope }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const { message } = request.body as { message: string };
@@ -163,7 +166,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   });
 
   // Create appointment
-  fastify.post("/patients/:id/appointments", { preHandler: auth }, async (request, reply) => {
+  fastify.post("/patients/:id/appointments", { preHandler: authScope }, async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const { type, scheduledAt, notes, status, doctorName, hospitalName } = request.body as {
@@ -246,7 +249,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
 
   // ─── Lab Results ────────────────────────────────────────────────────────────
 
-  fastify.get("/patients/:id/lab-results", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/lab-results", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { category } = request.query as { category?: string };
     const results = await prisma.labResult.findMany({
@@ -256,7 +259,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
     return results;
   });
 
-  fastify.post("/patients/:id/lab-results", { preHandler: auth }, async (request, reply) => {
+  fastify.post("/patients/:id/lab-results", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = request.body as any;
     const result = await prisma.labResult.create({
@@ -284,7 +287,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
     return result;
   });
 
-  fastify.post("/patients/:id/lab-results/bulk", { preHandler: auth }, async (request, reply) => {
+  fastify.post("/patients/:id/lab-results/bulk", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { results } = request.body as { results: any[] };
     const created = await prisma.$transaction(
@@ -333,7 +336,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
 
   // ─── Imaging Reports ─────────────────────────────────────────────────────────
 
-  fastify.get("/patients/:id/imaging", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/imaging", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     return prisma.imagingReport.findMany({
       where: { patientId: id },
@@ -341,7 +344,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post("/patients/:id/imaging", { preHandler: auth }, async (request, reply) => {
+  fastify.post("/patients/:id/imaging", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = request.body as any;
     return prisma.imagingReport.create({
@@ -380,7 +383,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
 
   // ─── Pathology Reports ───────────────────────────────────────────────────────
 
-  fastify.get("/patients/:id/pathology", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/pathology", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     return prisma.pathologyReport.findMany({
       where: { patientId: id },
@@ -388,7 +391,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post("/patients/:id/pathology", { preHandler: auth }, async (request, reply) => {
+  fastify.post("/patients/:id/pathology", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = request.body as any;
     return prisma.pathologyReport.create({
@@ -430,7 +433,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
 
   // ─── Vital Signs ─────────────────────────────────────────────────────────────
 
-  fastify.get("/patients/:id/vitals", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/vitals", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     return prisma.vitalSign.findMany({
       where: { patientId: id },
@@ -439,7 +442,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post("/patients/:id/vitals", { preHandler: auth }, async (request, reply) => {
+  fastify.post("/patients/:id/vitals", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = request.body as any;
     const bmi =
@@ -469,7 +472,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
 
   // ─── Clinical Notes ──────────────────────────────────────────────────────────
 
-  fastify.get("/patients/:id/clinical-notes", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/clinical-notes", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { type } = request.query as { type?: string };
     return prisma.clinicalNote.findMany({
@@ -478,7 +481,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post("/patients/:id/clinical-notes", { preHandler: auth }, async (request, reply) => {
+  fastify.post("/patients/:id/clinical-notes", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = request.body as any;
     return prisma.clinicalNote.create({
@@ -513,7 +516,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
 
   // ─── Documents (Privacy-Safe) ────────────────────────────────────────────────
 
-  fastify.post("/patients/:id/documents/upload-url", { preHandler: auth }, async (request, reply) => {
+  fastify.post("/patients/:id/documents/upload-url", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { category, fileType, title, description } = request.body as {
       category: string;
@@ -544,7 +547,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
     return { uploadUrl, documentId: doc.id };
   });
 
-  fastify.get("/patients/:id/documents", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/documents", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const docs = await prisma.patientDocument.findMany({
       where: { patientId: id },
@@ -676,7 +679,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
 
   // ─── Care Team ───────────────────────────────────────────────────────────────
 
-  fastify.get("/patients/:id/care-team", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/care-team", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     return prisma.careTeamMember.findMany({
       where: { patientId: id, isActive: true },
@@ -684,7 +687,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
     });
   });
 
-  fastify.post("/patients/:id/care-team", { preHandler: auth }, async (request, reply) => {
+  fastify.post("/patients/:id/care-team", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = request.body as any;
     return prisma.careTeamMember.create({
@@ -724,7 +727,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
 
   // ─── Complete Patient Record ──────────────────────────────────────────────────
 
-  fastify.get("/patients/:id/complete", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/complete", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const patient = await prisma.patient.findUnique({
       where: { id },
@@ -748,7 +751,7 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
 
   // ─── MDT Summary ─────────────────────────────────────────────────────────────
 
-  fastify.get("/patients/:id/mdt-summary", { preHandler: auth }, async (request, reply) => {
+  fastify.get("/patients/:id/mdt-summary", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const patient = await prisma.patient.findUnique({
       where: { id },
