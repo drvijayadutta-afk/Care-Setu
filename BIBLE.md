@@ -23,7 +23,7 @@ Care Setu is the **operating system for cancer care in India** — a single trus
 | ----- | ------- | ----------------------------------------------------------- | -------------- | -------------------- | ------- | ------------------------------------------------------------------------------------------------------- |
 | S1    | Tier 1  | Hard-fail boot on missing/dev JWT secret (typed env loader) | ✅ done         | 2026-05-02 12:40:52Z | 528cf56 | feat: hard-fail boot on missing or dev JWT secret [S1]                                                  |
 | S2    | Tier 1  | Patient-scope authorization middleware                      | 🟨 in-progress | 2026-05-02 13:06:57Z | manual  | Steps 1-3 shipped (nullable FK + log-only middleware); step 4 enforcement pending coordinator assign UI |
-| S3    | Tier 1  | Messaging channel abstraction (LSP fix)                     | ⬜ pending      | —                    | —       | Closes Bug 1 root cause                                                                                 |
+| S3    | Tier 1  | Messaging channel abstraction (LSP fix)                     | ✅ done         | 2026-05-02 13:33:08Z | 2c4c918 | [S3] Messaging channel abstraction — complete LSP contract enforcement                                  |
 | H1    | Tier 2  | Repository layer (DIP) — must precede H2                    | ⬜ pending      | —                    | —       | Wraps Prisma 1:1, non-breaking                                                                          |
 | H2    | Tier 2  | Split routes.ts by aggregate (SRP)                          | ⬜ pending      | —                    | —       | Depends on H1                                                                                           |
 | H3    | Tier 2  | AI + Storage ports + 5-min signed URL TTL                   | ⬜ pending      | —                    | —       | Closes PHI signed-URL gap                                                                               |
@@ -134,6 +134,7 @@ Execution is sequenced in the status table above. Tier 1 (S1–S3) is "ship this
 - `2026-05-02 19:00:00Z` · **S1** → done · `manual` · 5 boot scenarios verified (no/dev/short/real secret + dev fallback)
 - `2026-05-02 12:40:52Z` · **S1** → done · `528cf56` · feat: hard-fail boot on missing or dev JWT secret [S1]
 - `2026-05-02 13:06:57Z` · **S2** → in-progress · `manual` · Steps 1-3 shipped (nullable FK + log-only middleware); step 4 enforcement pending coordinator assign UI
+- `2026-05-02 13:33:08Z` · **S3** → done · `2c4c918` · [S3] Messaging channel abstraction — complete LSP contract enforcement
 <!-- bible:log:end -->
 
 ---
