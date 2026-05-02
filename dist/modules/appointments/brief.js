@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendPreVisitBrief = sendPreVisitBrief;
 exports.sendAppointmentReminder = sendAppointmentReminder;
 const client_1 = require("../../db/client");
-const sender_1 = require("../../webhook/sender");
+const router_1 = require("../../messaging/router");
 const claude_1 = require("../../integrations/claude");
 const prompts_1 = require("../../ai/prompts");
 async function sendPreVisitBrief(appointmentId, patientId) {
@@ -45,7 +45,7 @@ async function sendPreVisitBrief(appointmentId, patientId) {
     const patientMsg = patient.language === "hi"
         ? `📋 Kal ka appointment — aapka summary ready hai:\n\n${brief}\n\nYe apne doctor ko dikha saktein hain apne phone se. 🙏`
         : `📋 Tomorrow's visit — your summary is ready:\n\n${brief}\n\nYou can show this to your doctor from your phone. 🙏`;
-    await (0, sender_1.sendText)(patient.whatsappNumber, patientMsg);
+    await router_1.messagingRouter.sendText(patient.id, patientMsg);
     // Send to doctor if opted in
     const doctor = await client_1.prisma.doctor.findFirst({
         where: {
@@ -54,7 +54,7 @@ async function sendPreVisitBrief(appointmentId, patientId) {
         },
     });
     if (doctor?.whatsappNumber) {
-        await (0, sender_1.sendText)(doctor.whatsappNumber, `📋 Pre-visit brief — ${patient.name}\n(Tomorrow ${appointment.scheduledAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })})\n\n${brief}`);
+        await router_1.messagingRouter.sendText(doctor.whatsappNumber, `📋 Pre-visit brief — ${patient.name}\n(Tomorrow ${appointment.scheduledAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })})\n\n${brief}`, true);
     }
     // Update appointment record
     await client_1.prisma.appointment.update({
@@ -82,28 +82,28 @@ async function sendAppointmentReminder(appointmentId, patientId, type) {
             const msg = lang === "hi"
                 ? `📅 Yaad dilana — parson aapka appointment hai:\n${appointment.doctorName} — ${appointment.hospitalName}\n${apptTime}\n\nKoi documents ya reports taiyaar kar lein.`
                 : `📅 Reminder — your appointment is in 2 days:\n${appointment.doctorName} — ${appointment.hospitalName}\n${apptTime}\n\nGet any reports or documents ready.`;
-            await (0, sender_1.sendText)(patient.whatsappNumber, msg);
+            await router_1.messagingRouter.sendText(patient.id, msg);
             break;
         }
         case "24h": {
             const msg = lang === "hi"
                 ? `📅 Kal appointment hai:\n${appointment.doctorName} — ${appointment.hospitalName}\n${apptTime}\n\nLe jaayein:\n• Purani reports (x-ray, blood tests, scans)\n• Dawaiyon ki list\n• Koi bhi sawaal jo poochhna ho`
                 : `📅 Appointment tomorrow:\n${appointment.doctorName} — ${appointment.hospitalName}\n${apptTime}\n\nBring:\n• Previous reports (x-ray, blood tests, scans)\n• Your medication list\n• Any questions you want to ask`;
-            await (0, sender_1.sendText)(patient.whatsappNumber, msg);
+            await router_1.messagingRouter.sendText(patient.id, msg);
             break;
         }
         case "2h": {
             const msg = lang === "hi"
                 ? `📅 2 ghante mein appointment hai.\n\n${appointment.doctorName} — ${appointment.hospitalName}\n\nAapka summary doctor ko dikhane ke liye ready hai — neche scroll karein usse dhundne ke liye.\n\nKoi extra sawaal add karna hai? Abhi type karein.`
                 : `📅 Your appointment is in 2 hours.\n\n${appointment.doctorName} — ${appointment.hospitalName}\n\nYour summary is ready to show the doctor — scroll up to find it.\n\nAnything to add before you go? Type it now.`;
-            await (0, sender_1.sendText)(patient.whatsappNumber, msg);
+            await router_1.messagingRouter.sendText(patient.id, msg);
             break;
         }
         case "post_visit": {
             const msg = lang === "hi"
                 ? `Aapki visit kaisi rahi? 💙\n\n1 – Achhi khabar, rahat mili\n2 – Theek thaak, kuch process karna hai\n3 – Mushkil khabar, samay chahiye\n4 – Confuse hun, poori baat samajh nahi aayi\n5 – Kuch aur`
                 : `How did your visit go? 💙\n\n1 – Good news, feeling relieved\n2 – Okay, some things to process\n3 – Difficult news, need some time\n4 – Confused, didn't fully understand\n5 – Something else`;
-            await (0, sender_1.sendText)(patient.whatsappNumber, msg);
+            await router_1.messagingRouter.sendText(patient.id, msg);
             await client_1.prisma.appointment.update({
                 where: { id: appointmentId },
                 data: { status: "completed", postVisitSent: true },

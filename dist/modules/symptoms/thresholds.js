@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.evaluateThresholds = evaluateThresholds;
 const client_1 = require("../../db/client");
-const sender_1 = require("../../webhook/sender");
+const router_1 = require("../../messaging/router");
 // The 10 core threshold rules, protocol-informed
 const THRESHOLD_RULES = [
     {
@@ -199,13 +199,13 @@ async function evaluateThresholds(patient, checkin, score, symptoms, cycleDay) {
             .patientMessage(patient.language)
             .replace("[COORDINATOR_NUMBER]", process.env.COORDINATOR_WHATSAPP_NUMBER || "your care team")
             .replace("[HOSPITAL_NUMBER]", "your hospital helpline");
-        await (0, sender_1.sendText)(patient.whatsappNumber, patientMsg);
+        await router_1.messagingRouter.sendText(patient.id, patientMsg);
         // Notify caregiver
         const caregiver = await client_1.prisma.caregiver.findUnique({
             where: { patientId: patient.id },
         });
         if (caregiver?.isEnrolled) {
-            await (0, sender_1.sendText)(caregiver.whatsappNumber, rule.caregiverMessage);
+            await router_1.messagingRouter.sendText(caregiver.whatsappNumber, rule.caregiverMessage, true);
             await client_1.prisma.alert.update({
                 where: { id: alert.id },
                 data: { caregiverNotified: true },
@@ -214,7 +214,7 @@ async function evaluateThresholds(patient, checkin, score, symptoms, cycleDay) {
         // Notify coordinator for urgent/caution with flag
         if (rule.notifyCoordinator && process.env.COORDINATOR_WHATSAPP_NUMBER) {
             const coordMsg = `🚨 Alert [${rule.severity.toUpperCase()}]\nPatient: ${patient.name} (${patient.whatsappNumber})\nTreatment: ${patient.treatmentProtocol} Cycle ${patient.currentCycle} Day ${cycleDay}\nRule: ${rule.description}\nSymptoms: ${symptoms.join(", ")}\nScore: ${score}/5`;
-            await (0, sender_1.sendText)(process.env.COORDINATOR_WHATSAPP_NUMBER, coordMsg);
+            await router_1.messagingRouter.sendText(process.env.COORDINATOR_WHATSAPP_NUMBER, coordMsg, true);
             await client_1.prisma.alert.update({
                 where: { id: alert.id },
                 data: { coordinatorNotified: true },

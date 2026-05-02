@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendCheckinMessage = sendCheckinMessage;
 exports.handleCheckinResponse = handleCheckinResponse;
 const client_1 = require("../../db/client");
-const sender_1 = require("../../webhook/sender");
+const router_1 = require("../../messaging/router");
 const claude_1 = require("../../integrations/claude");
 const prompts_1 = require("../../ai/prompts");
 const thresholds_1 = require("../symptoms/thresholds");
@@ -18,7 +18,7 @@ async function sendCheckinMessage(patientId, cycleDay, type) {
         orderBy: { createdAt: "desc" },
     });
     const message = buildCheckinMessage(patient, cycleDay, type, yesterday?.score ?? null);
-    await (0, sender_1.sendButtonMessage)(patient.whatsappNumber, message, [
+    await router_1.messagingRouter.sendButtons(patient.id, message, [
         { id: "checkin_1", title: "😰 Very Hard (1)" },
         { id: "checkin_2", title: "😔 Hard (2)" },
         { id: "checkin_3", title: "😐 Okay (3)" },
@@ -83,7 +83,7 @@ async function handleCheckinResponse(patient, text, preExtractedScore, isSymptom
         }
     }
     if (score === null) {
-        await (0, sender_1.sendText)(patient.whatsappNumber, patient.language === "hi"
+        await router_1.messagingRouter.sendText(patient.id, patient.language === "hi"
             ? "1 से 5 के बीच बताइए — 1 बहुत मुश्किल, 5 अच्छा। या अपनी बात बताइए।"
             : "Please tell me 1–5 (1 = very hard, 5 = good), or describe how you're feeling.");
         return;
@@ -121,25 +121,25 @@ async function sendCheckinResponse(patient, score, symptoms, emotionalState, cyc
         const msg = lang === "hi"
             ? `${name} जी, आपने बताया — शुक्रिया। 💙\n\nआज बहुत मुश्किल है। ये real है — इसे feel करना ज़रूरी नहीं कि आप कमज़ोर हैं।\n\n${getSymptomGuidance(symptoms, lang)}\n\nआपके caregiver को inform कर दिया है। आपको कुछ नहीं करना।\n\n4 घंटे में दोबारा पूछूँगा। 🙏`
             : `Thank you for telling me, ${name}. 💙\n\nToday is very hard. That's real — feeling this doesn't mean you are weak.\n\n${getSymptomGuidance(symptoms, lang)}\n\nYour caregiver has been notified. You don't need to do anything.\n\nI'll check back in 4 hours. 🙏`;
-        await (0, sender_1.sendText)(patient.whatsappNumber, msg);
+        await router_1.messagingRouter.sendText(patient.id, msg);
     }
     else if (score === 2) {
         const msg = lang === "hi"
             ? `${name} जी। 🙏\n\nमुश्किल है, पर आप handle कर रहे हैं — यही काफी है।\n\n${getSymptomGuidance(symptoms, lang)}\n\nबाद में और पूछूँगा।`
             : `${name}. 🙏\n\nIt's hard, but you are managing — that's enough for now.\n\n${getSymptomGuidance(symptoms, lang)}\n\nI'll check in again later.`;
-        await (0, sender_1.sendText)(patient.whatsappNumber, msg);
+        await router_1.messagingRouter.sendText(patient.id, msg);
     }
     else if (score === 3) {
         const msg = lang === "hi"
             ? `ठीक है — समझ आया। ${name} जी, okay होना भी एक जीत है।\n${symptoms.length > 0 ? `\n${getSymptomGuidance(symptoms, lang)}` : ""}\nकल और बेहतर हो। 💙`
             : `Okay — noted. ${name}, being okay is its own victory.\n${symptoms.length > 0 ? `\n${getSymptomGuidance(symptoms, lang)}` : ""}\nHere's to a better day tomorrow. 💙`;
-        await (0, sender_1.sendText)(patient.whatsappNumber, msg);
+        await router_1.messagingRouter.sendText(patient.id, msg);
     }
     else {
         const msg = lang === "hi"
             ? `${score === 5 ? "बढ़िया!" : "अच्छा!"} ${name} जी — ये सुनकर अच्छा लगा। 😊\nइस energy को बचाकर रखें। 💙`
             : `${score === 5 ? "Great!" : "Good to hear,"} ${name}! 😊\nSave that energy — you'll need it. 💙`;
-        await (0, sender_1.sendText)(patient.whatsappNumber, msg);
+        await router_1.messagingRouter.sendText(patient.id, msg);
     }
     // Additional emotional support if flagged
     if (emotionalState === "distressed" || emotionalState === "anxious") {
@@ -147,7 +147,7 @@ async function sendCheckinResponse(patient, score, symptoms, emotionalState, cyc
         const supportMsg = lang === "hi"
             ? "अगर आप बात करना चाहते हैं — मन में जो भी है — बस लिखें। मैं यहाँ हूँ।"
             : "If you want to talk — whatever's on your mind — just write. I'm here.";
-        await (0, sender_1.sendText)(patient.whatsappNumber, supportMsg);
+        await router_1.messagingRouter.sendText(patient.id, supportMsg);
     }
 }
 function getSymptomGuidance(symptoms, lang) {

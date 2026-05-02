@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -6,7 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.transcribeVoiceNote = transcribeVoiceNote;
 const openai_1 = __importDefault(require("openai"));
 const axios_1 = __importDefault(require("axios"));
-const sender_1 = require("../webhook/sender");
+const telegram_api_1 = require("./telegram-api");
 const openai = new openai_1.default({ apiKey: process.env.OPENAI_API_KEY });
 const LANGUAGE_TO_BCP47 = {
     hi: "hi",
@@ -14,21 +47,20 @@ const LANGUAGE_TO_BCP47 = {
     ta: "ta",
     en: "en",
 };
-async function transcribeVoiceNote(mediaId, patientLanguage) {
+async function transcribeVoiceNote(mediaId, patientLanguage, platform = "whatsapp") {
     try {
-        // 1. Get the actual download URL from WhatsApp
-        const mediaUrl = await (0, sender_1.downloadMediaUrl)(mediaId);
-        // 2. Download the audio buffer
-        const response = await axios_1.default.get(mediaUrl, {
-            responseType: "arraybuffer",
-            headers: {
-                Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-            },
-        });
-        // 3. Create a File object from the buffer (Whisper expects a file)
-        const audioBuffer = Buffer.from(response.data);
-        const file = new File([audioBuffer], "voice.ogg", { type: "audio/ogg" });
-        // 4. Transcribe with language hint
+        let audioBuffer;
+        if (platform === "telegram") {
+            // Download from Telegram using file_id
+            audioBuffer = await downloadFromTelegram(mediaId);
+        }
+        else {
+            // Download from WhatsApp using media ID
+            audioBuffer = await downloadFromWhatsApp(mediaId);
+        }
+        // Create a File object from the buffer (Whisper expects a file)
+        const file = new File([new Uint8Array(audioBuffer)], "voice.ogg", { type: "audio/ogg" });
+        // Transcribe with language hint
         const transcript = await openai.audio.transcriptions.create({
             model: "whisper-1",
             file,
@@ -40,5 +72,23 @@ async function transcribeVoiceNote(mediaId, patientLanguage) {
         console.error("Whisper transcription failed:", err);
         return null;
     }
+}
+async function downloadFromWhatsApp(mediaId) {
+    const { downloadMediaUrl } = await Promise.resolve().then(() => __importStar(require("../webhook/sender")));
+    const mediaUrl = await downloadMediaUrl(mediaId);
+    const response = await axios_1.default.get(mediaUrl, {
+        responseType: "arraybuffer",
+        headers: {
+            Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+        },
+    });
+    return Buffer.from(response.data);
+}
+async function downloadFromTelegram(fileId) {
+    const telegram = new telegram_api_1.TelegramApi(process.env.TELEGRAM_BOT_TOKEN);
+    const fileInfo = await telegram.getFile(fileId);
+    const filePath = fileInfo.file_path;
+    const response = await axios_1.default.get(`https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${filePath}`, { responseType: "arraybuffer" });
+    return Buffer.from(response.data);
 }
 //# sourceMappingURL=whisper.js.map

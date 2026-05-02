@@ -20,6 +20,17 @@ import { pollAisensyMessages } from "./integrations/aisensy-poller";
 import { registerApiRoutes } from "./api/routes";
 import { registerAuthRoutes } from "./api/auth";
 import { registerWebSocketRoutes } from "./websocket/routes";
+import { requirePatientAccess } from "./api/middleware/patient-scope";
+import { PatientRepository } from "./repositories/patient.repo";
+import { CoordinatorRepository } from "./repositories/coordinator.repo";
+import { ConversationRepository } from "./repositories/conversation.repo";
+import { RecordRepository } from "./repositories/record.repo";
+import type {
+  IPatientRepository,
+  ICoordinatorRepository,
+  IConversationRepository,
+  IRecordRepository,
+} from "./repositories/types";
 
 const fastify = Fastify({
   logger: config.nodeEnv !== "production",
@@ -83,6 +94,20 @@ async function start() {
         reply.status(401).send({ error: "Unauthorized" });
       }
     });
+
+    // Decorator for patient-scoped authorization
+    fastify.decorate("requirePatientAccess", requirePatientAccess);
+
+    // Composition root — instantiate repositories and inject as decorators
+    const patientRepo: IPatientRepository = new PatientRepository();
+    const coordinatorRepo: ICoordinatorRepository = new CoordinatorRepository();
+    const conversationRepo: IConversationRepository = new ConversationRepository();
+    const recordRepo: IRecordRepository = new RecordRepository();
+
+    fastify.decorate("patientRepo", patientRepo);
+    fastify.decorate("coordinatorRepo", coordinatorRepo);
+    fastify.decorate("conversationRepo", conversationRepo);
+    fastify.decorate("recordRepo", recordRepo);
 
     // Add WebSocket support
     await fastify.register(websocket);

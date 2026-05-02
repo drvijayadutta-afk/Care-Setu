@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendDoctorWeeklySignals = sendDoctorWeeklySignals;
 const client_1 = require("../../db/client");
-const sender_1 = require("../../webhook/sender");
+const router_1 = require("../../messaging/router");
 const claude_1 = require("../../integrations/claude");
 const prompts_1 = require("../../ai/prompts");
 // BullMQ job: runs every Sunday at 7 PM
@@ -77,6 +77,6 @@ async function sendSignalForDoctor(doctorId, whatsappNumber, doctorName) {
     const header = `Dr. ${doctorName} — Weekly Patient Signal`;
     const body = signalLines.join("\n\n");
     const footer = `\nReply with patient name to see full check-in log.`;
-    await (0, sender_1.sendText)(whatsappNumber, `${header}\n\n${body}${footer}`);
+    await router_1.messagingRouter.sendText(whatsappNumber, `${header}\n\n${body}${footer}`, true);
 }
 //# sourceMappingURL=signal.js.map

@@ -1,1 +1,1 @@
-export declare function transcribeVoiceNote(mediaId: string, patientLanguage: string): Promise<string | null>;
+export declare function transcribeVoiceNote(mediaId: string, patientLanguage: string, platform?: "whatsapp" | "telegram"): Promise<string | null>;
