@@ -21,34 +21,34 @@ Care Setu is the **operating system for cancer care in India** — a single trus
 <!-- bible:status:start -->
 | ID    | Section | Title                                                       | Status    | Date                 | Commit  | Note                                                   |
 | ----- | ------- | ----------------------------------------------------------- | --------- | -------------------- | ------- | ------------------------------------------------------ |
-| S1    | Tier 1  | Hard-fail boot on missing/dev JWT secret (typed env loader) | ✅ done    | 2026-05-02 19:00:00Z | manual | 5 boot scenarios verified      |
-| S2    | Tier 1  | Patient-scope authorization middleware                      | ⬜ pending | —                    | —      | Has 4-step prod migration      |
-| S3    | Tier 1  | Messaging channel abstraction (LSP fix)                     | ⬜ pending | —                    | —      | Closes Bug 1 root cause        |
-| H1    | Tier 2  | Repository layer (DIP) — must precede H2                    | ⬜ pending | —                    | —      | Wraps Prisma 1:1, non-breaking |
-| H2    | Tier 2  | Split routes.ts by aggregate (SRP)                          | ⬜ pending | —                    | —      | Depends on H1                  |
-| H3    | Tier 2  | AI + Storage ports + 5-min signed URL TTL                   | ⬜ pending | —                    | —      | Closes PHI signed-URL gap      |
-| H4    | Tier 2  | Patient detail page split + record registry (SRP/OCP)       | ⬜ pending | —                    | —      | Independent of backend tiers   |
-| H5    | Tier 2  | Onboarding state machine (SRP + transactional integrity)    | ⬜ pending | —                    | —      | Needs H1 and S3                |
-| M1    | Tier 3  | Config-driven SSL (replace URL substring match)             | ⬜ pending | —                    | —      | Needs S1 env loader            |
-| M2    | Tier 3  | Login rate-limit + JWT TTL/role to config                   | ⬜ pending | —                    | —      | Needs S1 env loader            |
-| M3    | Tier 3  | AI extract review queue (no silent record creation)         | ⬜ pending | —                    | —      | Schema migration               |
-| M4    | Tier 3  | Split coordinator-app/lib/api.ts (ISP)                      | ⬜ pending | —                    | —      | Falls out of H4                |
-| P1.1  | Phase 1 | Patient PWA scaffold at app.caresetu.health                 | ⬜ pending | —                    | —      | OTP + WebAuthn                 |
-| P1.2  | Phase 1 | Family invite + consent + scope flow                        | ⬜ pending | —                    | —      | 4 roles incl. CHW              |
-| P1.3  | Phase 1 | Clinician console role-aware views (Coord/Onc/Nurse)        | ⬜ pending | —                    | —      | —                              |
-| P1.4  | Phase 1 | MDT room MVP (sync + auto-brief)                            | ⬜ pending | —                    | —      | Daily.co video                 |
-| P1.5  | Phase 1 | HL7 FHIR adapter for one partner HIS                        | ⬜ pending | —                    | —      | —                              |
-| P1.6  | Phase 1 | ABHA identity integration (now Phase 1 per v2)              | ⬜ pending | —                    | —      | Sandbox first                  |
-| P1.7  | Phase 1 | IVR + SMS access modes (Exotel)                             | ⬜ pending | —                    | —      | Voice persona                  |
-| P1.8  | Phase 1 | Pictogram + voice-first symptom UI                          | ⬜ pending | —                    | —      | Bhasini TTS                    |
-| P1.9  | Phase 1 | Audit log middleware + table                                | ⬜ pending | —                    | —      | Append-only                    |
-| P1.10 | Phase 1 | Onboarding playbook (white-glove)                           | ⬜ pending | —                    | —      | —                              |
-| O1    | Org     | Engage healthcare lawyer (DPDP gap analysis)                | ⬜ pending | —                    | —      | 2-3 candidates by W3           |
-| O2    | Org     | Sign 2 urban pilot hospitals MOU                            | ⬜ pending | —                    | —      | Tier-1 + tier-2                |
-| O3    | Org     | Sign 1 rural NGO partnership (St. Jude / Karkinos / ICS)    | ⬜ pending | —                    | —      | Hub-and-spoke pilot            |
-| O4    | Org     | Shadow 5 oncologists; baseline case-prep + MDT-prep time    | ⬜ pending | —                    | —      | The "irresistible" KPI         |
-| O5    | Org     | First weekly architecture review with pilot hospital tech   | ⬜ pending | —                    | —      | —                              |
-| O6    | Org     | Publish v2 PRODUCT_PLAN.md (pan-India + accessibility)      | ⬜ pending | —                    | —      | Currently in chat only         |
+| S1    | Tier 1  | Hard-fail boot on missing/dev JWT secret (typed env loader) | ✅ done    | 2026-05-02 12:40:52Z | 528cf56 | feat: hard-fail boot on missing or dev JWT secret [S1] |
+| S2    | Tier 1  | Patient-scope authorization middleware                      | ⬜ pending | —                    | —       | Has 4-step prod migration                              |
+| S3    | Tier 1  | Messaging channel abstraction (LSP fix)                     | ⬜ pending | —                    | —       | Closes Bug 1 root cause                                |
+| H1    | Tier 2  | Repository layer (DIP) — must precede H2                    | ⬜ pending | —                    | —       | Wraps Prisma 1:1, non-breaking                         |
+| H2    | Tier 2  | Split routes.ts by aggregate (SRP)                          | ⬜ pending | —                    | —       | Depends on H1                                          |
+| H3    | Tier 2  | AI + Storage ports + 5-min signed URL TTL                   | ⬜ pending | —                    | —       | Closes PHI signed-URL gap                              |
+| H4    | Tier 2  | Patient detail page split + record registry (SRP/OCP)       | ⬜ pending | —                    | —       | Independent of backend tiers                           |
+| H5    | Tier 2  | Onboarding state machine (SRP + transactional integrity)    | ⬜ pending | —                    | —       | Needs H1 and S3                                        |
+| M1    | Tier 3  | Config-driven SSL (replace URL substring match)             | ⬜ pending | —                    | —       | Needs S1 env loader                                    |
+| M2    | Tier 3  | Login rate-limit + JWT TTL/role to config                   | ⬜ pending | —                    | —       | Needs S1 env loader                                    |
+| M3    | Tier 3  | AI extract review queue (no silent record creation)         | ⬜ pending | —                    | —       | Schema migration                                       |
+| M4    | Tier 3  | Split coordinator-app/lib/api.ts (ISP)                      | ⬜ pending | —                    | —       | Falls out of H4                                        |
+| P1.1  | Phase 1 | Patient PWA scaffold at app.caresetu.health                 | ⬜ pending | —                    | —       | OTP + WebAuthn                                         |
+| P1.2  | Phase 1 | Family invite + consent + scope flow                        | ⬜ pending | —                    | —       | 4 roles incl. CHW                                      |
+| P1.3  | Phase 1 | Clinician console role-aware views (Coord/Onc/Nurse)        | ⬜ pending | —                    | —       | —                                                      |
+| P1.4  | Phase 1 | MDT room MVP (sync + auto-brief)                            | ⬜ pending | —                    | —       | Daily.co video                                         |
+| P1.5  | Phase 1 | HL7 FHIR adapter for one partner HIS                        | ⬜ pending | —                    | —       | —                                                      |
+| P1.6  | Phase 1 | ABHA identity integration (now Phase 1 per v2)              | ⬜ pending | —                    | —       | Sandbox first                                          |
+| P1.7  | Phase 1 | IVR + SMS access modes (Exotel)                             | ⬜ pending | —                    | —       | Voice persona                                          |
+| P1.8  | Phase 1 | Pictogram + voice-first symptom UI                          | ⬜ pending | —                    | —       | Bhasini TTS                                            |
+| P1.9  | Phase 1 | Audit log middleware + table                                | ⬜ pending | —                    | —       | Append-only                                            |
+| P1.10 | Phase 1 | Onboarding playbook (white-glove)                           | ⬜ pending | —                    | —       | —                                                      |
+| O1    | Org     | Engage healthcare lawyer (DPDP gap analysis)                | ⬜ pending | —                    | —       | 2-3 candidates by W3                                   |
+| O2    | Org     | Sign 2 urban pilot hospitals MOU                            | ⬜ pending | —                    | —       | Tier-1 + tier-2                                        |
+| O3    | Org     | Sign 1 rural NGO partnership (St. Jude / Karkinos / ICS)    | ⬜ pending | —                    | —       | Hub-and-spoke pilot                                    |
+| O4    | Org     | Shadow 5 oncologists; baseline case-prep + MDT-prep time    | ⬜ pending | —                    | —       | The "irresistible" KPI                                 |
+| O5    | Org     | First weekly architecture review with pilot hospital tech   | ⬜ pending | —                    | —       | —                                                      |
+| O6    | Org     | Publish v2 PRODUCT_PLAN.md (pan-India + accessibility)      | ⬜ pending | —                    | —       | Currently in chat only                                 |
 <!-- bible:status:end -->
 
 ---
@@ -132,6 +132,7 @@ Execution is sequenced in the status table above. Tier 1 (S1–S3) is "ship this
 
 <!-- bible:log:start -->
 - `2026-05-02 19:00:00Z` · **S1** → done · `manual` · 5 boot scenarios verified (no/dev/short/real secret + dev fallback)
+- `2026-05-02 12:40:52Z` · **S1** → done · `528cf56` · feat: hard-fail boot on missing or dev JWT secret [S1]
 <!-- bible:log:end -->
 
 ---
