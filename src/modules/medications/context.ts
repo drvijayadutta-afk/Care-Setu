@@ -1,5 +1,5 @@
 import { prisma } from "../../db/client";
-import { sendText, sendButtonMessage } from "../../webhook/sender";
+import { messagingRouter } from "../../messaging/router";
 import type { Patient } from "@prisma/client";
 
 // Pre-loaded context for common cancer medications
@@ -76,7 +76,7 @@ export async function sendMedicationContext(patientId: string, medicationId: str
       ? `💊 *${medication.name}* ke baare mein:\n\n*Kya karta hai:* ${context.purpose}\n\n*Kab lein:* ${context.timing}\n\n*Normal side effects:*\n${context.sideEffects.map((s) => `• ${s}`).join("\n")}\n\n*Dhyan rakhein:*\n${context.watchFor.map((w) => `• ${w}`).join("\n")}`
       : `💊 About *${medication.name}*:\n\n*What it does:* ${context.purpose}\n\n*When to take:* ${context.timing}\n\n*Normal side effects:*\n${context.sideEffects.map((s) => `• ${s}`).join("\n")}\n\n*Watch for:*\n${context.watchFor.map((w) => `• ${w}`).join("\n")}`;
 
-  await sendText(patient.whatsappNumber, msg);
+  await messagingRouter.sendText(patient.id, msg);
 
   await prisma.medication.update({
     where: { id: medicationId },
@@ -101,7 +101,7 @@ export async function sendMedicationReminder(patientId: string) {
         ? `💊 *${med.name}* — lene ka waqt.\n_${med.purpose.split(".")[0]}._`
         : `💊 *${med.name}* — time to take it.\n_${med.purpose.split(".")[0]}._`;
 
-    await sendButtonMessage(patient.whatsappNumber, reminderMsg, [
+    await messagingRouter.sendButtons(patient.id, reminderMsg, [
       { id: `med_taken_${med.id}`, title: "✅ Le liya" },
       { id: `med_skip_${med.id}`, title: "⏭ Baad mein" },
       { id: `med_question_${med.id}`, title: "❓ Sawaal hai" },
@@ -115,8 +115,8 @@ export async function handleMedicationResponse(patient: Patient, replyId: string
     await prisma.medicationLog.create({
       data: { medicationId: medId, patientId: patient.id, taken: true, takenAt: new Date() },
     });
-    await sendText(
-      patient.whatsappNumber,
+    await messagingRouter.sendText(
+      patient.id,
       patient.language === "hi" ? "✅ Note kar liya. Shukriya!" : "✅ Noted. Thank you!"
     );
   } else if (replyId.startsWith("med_skip_")) {
@@ -124,8 +124,8 @@ export async function handleMedicationResponse(patient: Patient, replyId: string
     await prisma.medicationLog.create({
       data: { medicationId: medId, patientId: patient.id, taken: false },
     });
-    await sendText(
-      patient.whatsappNumber,
+    await messagingRouter.sendText(
+      patient.id,
       patient.language === "hi"
         ? "Samjha. Isko aaj lena mat bhoolein — kal ke liye remind karunga."
         : "Understood. Try not to miss it today — I'll remind you tomorrow."
@@ -139,8 +139,8 @@ export async function handleMedicationQuery(patient: Patient, text: string) {
   });
 
   if (medications.length === 0) {
-    await sendText(
-      patient.whatsappNumber,
+    await messagingRouter.sendText(
+      patient.id,
       patient.language === "hi"
         ? "Aapki dawaiyon ki list abhi add nahi hui hai. Apne care coordinator se contact karein."
         : "Your medication list hasn't been added yet. Please contact your care coordinator."
@@ -151,8 +151,8 @@ export async function handleMedicationQuery(patient: Patient, text: string) {
   const medList = medications.map((m) => `• ${m.name} — ${m.timing}`).join("\n");
   const lang = patient.language;
 
-  await sendText(
-    patient.whatsappNumber,
+  await messagingRouter.sendText(
+    patient.id,
     lang === "hi"
       ? `Aapki dawaiyan:\n\n${medList}\n\nKisi specific dawai ke baare mein poochhna hai? Naam likh kar bhejein.`
       : `Your medications:\n\n${medList}\n\nWant to know about a specific one? Just type the name.`

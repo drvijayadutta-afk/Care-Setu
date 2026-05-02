@@ -34,9 +34,17 @@ const GREETINGS = {
 };
 
 // ─── Safe DB helper ────────────────────────────────────────────────────────────
-async function safeUpdate(whatsappNumber: string, data: object) {
+async function safeUpdate(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string },
+  data: object
+) {
   try {
-    await prisma.patient.update({ where: { whatsappNumber }, data });
+    let where: any;
+    if ("whatsappNumber" in identifier) where = { whatsappNumber: identifier.whatsappNumber };
+    else if ("telegramChatId" in identifier) where = { telegramChatId: identifier.telegramChatId };
+    else where = { id: identifier.patientId };
+
+    await prisma.patient.update({ where, data });
     return true;
   } catch (err: any) {
     console.error(`❌ DB update failed at step: ${err?.message}`);
@@ -44,63 +52,132 @@ async function safeUpdate(whatsappNumber: string, data: object) {
   }
 }
 
+// ─── Resolve patientId from any identifier type ────────────────────────────────
+async function getPatientIdFromIdentifier(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string }
+): Promise<string | null> {
+  try {
+    let where: any;
+    if ("whatsappNumber" in identifier) where = { whatsappNumber: identifier.whatsappNumber };
+    else if ("telegramChatId" in identifier) where = { telegramChatId: identifier.telegramChatId };
+    else return identifier.patientId;
+
+    const patient = await prisma.patient.findUnique({ where, select: { id: true } });
+    return patient?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Main handler ──────────────────────────────────────────────────────────────
 export async function handleOnboarding(
-  whatsappNumber: string,
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string },
   patient: Patient | null,
   incomingText: string
 ) {
-  const step = patient?.onboardingStep ?? 0;
-  const data = (patient?.onboardingData as Record<string, any>) ?? {};
+  // Resolve patient if not provided
+  let resolvedPatient = patient;
+  if (!resolvedPatient) {
+    if ("patientId" in identifier) {
+      resolvedPatient = await prisma.patient.findUnique({
+        where: { id: identifier.patientId },
+      }) ?? undefined;
+    } else if ("whatsappNumber" in identifier) {
+      resolvedPatient = await prisma.patient.findUnique({
+        where: { whatsappNumber: identifier.whatsappNumber },
+      }) ?? undefined;
+    } else if ("telegramChatId" in identifier) {
+      resolvedPatient = await prisma.patient.findUnique({
+        where: { telegramChatId: identifier.telegramChatId },
+      }) ?? undefined;
+    }
+  }
+
+  const step = resolvedPatient?.onboardingStep ?? 0;
+  const data = (resolvedPatient?.onboardingData as Record<string, any>) ?? {};
 
   switch (step) {
-    case 0: return sendStep1_Language(whatsappNumber);
-    case 1: return processLanguage(whatsappNumber, incomingText, data);
-    case 2: return processName(whatsappNumber, patient!, incomingText, data);
-    case 3: return processCancerType(whatsappNumber, patient!, incomingText, data);
-    case 4: return processProtocol(whatsappNumber, patient!, incomingText, data);
-    case 5: return processCycleInfo(whatsappNumber, patient!, incomingText, data);
-    case 6: return processHospital(whatsappNumber, patient!, incomingText, data);
-    case 7: return processCaregiver(whatsappNumber, patient!, incomingText, data);
-    case 8: return processConsent(whatsappNumber, patient!, incomingText, data);
+    case 0: return sendStep1_Language(identifier);
+    case 1: return processLanguage(identifier, incomingText, data);
+    case 2: return processName(identifier, resolvedPatient!, incomingText, data);
+    case 3: return processCancerType(identifier, resolvedPatient!, incomingText, data);
+    case 4: return processProtocol(identifier, resolvedPatient!, incomingText, data);
+    case 5: return processCycleInfo(identifier, resolvedPatient!, incomingText, data);
+    case 6: return processHospital(identifier, resolvedPatient!, incomingText, data);
+    case 7: return processCaregiver(identifier, resolvedPatient!, incomingText, data);
+    case 8: return processConsent(identifier, resolvedPatient!, incomingText, data);
     default: return;
   }
 }
 
 // ─── Step 0 → 1: Language selection ────────────────────────────────────────────
-async function sendStep1_Language(whatsappNumber: string) {
+async function sendStep1_Language(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string }
+) {
   // Save to DB FIRST so we don't loop on failure
+  let patientId: string;
   try {
-    await prisma.patient.upsert({
-      where: { whatsappNumber },
-      update: { onboardingStep: 1 },
-      create: {
-        whatsappNumber, onboardingStep: 1,
-        name: "", cancerType: "", treatmentProtocol: "",
-        cycleStartDate: new Date(), hospitalName: "", doctorName: "",
-      },
-    });
-    console.log(`✅ Patient record created/updated for ${whatsappNumber}`);
+    let result;
+    if ("patientId" in identifier) {
+      result = await prisma.patient.update({
+        where: { id: identifier.patientId },
+        data: { onboardingStep: 1 },
+      });
+      patientId = result.id;
+    } else if ("whatsappNumber" in identifier) {
+      result = await prisma.patient.upsert({
+        where: { whatsappNumber: identifier.whatsappNumber },
+        update: { onboardingStep: 1 },
+        create: {
+          whatsappNumber: identifier.whatsappNumber,
+          onboardingStep: 1,
+          name: "", cancerType: "", treatmentProtocol: "",
+          cycleStartDate: new Date(), hospitalName: "", doctorName: "",
+        },
+      });
+      patientId = result.id;
+    } else {
+      result = await prisma.patient.upsert({
+        where: { telegramChatId: identifier.telegramChatId },
+        update: { onboardingStep: 1 },
+        create: {
+          telegramChatId: identifier.telegramChatId,
+          whatsappNumber: `telegram_${identifier.telegramChatId}`,
+          onboardingStep: 1,
+          name: "", cancerType: "", treatmentProtocol: "",
+          cycleStartDate: new Date(), hospitalName: "", doctorName: "",
+        },
+      });
+      patientId = result.id;
+    }
+    const idStr = "whatsappNumber" in identifier ? identifier.whatsappNumber
+      : "telegramChatId" in identifier ? identifier.telegramChatId : identifier.patientId;
+    console.log(`✅ Patient record created/updated for ${idStr}`);
   } catch (err: any) {
     console.error(`❌ Failed to create patient: ${err?.message}`);
+    return;
   }
 
-  await messagingRouter.sendButtons(whatsappNumber, GREETINGS.en, [
+  await messagingRouter.sendButtons(patientId, GREETINGS.en, [
     { id: "lang_hi", title: "हिंदी" },
     { id: "lang_en", title: "English" },
     { id: "lang_mr", title: "मराठी" },
-  ], true);
+  ]);
 }
 
 // ─── Step 1 → 2: Language chosen ───────────────────────────────────────────────
-async function processLanguage(whatsappNumber: string, text: string, data: Record<string, any>) {
+async function processLanguage(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string },
+  text: string,
+  data: Record<string, any>
+) {
   const lang =
     text === "lang_hi" || text.includes("हिंदी") || text.toLowerCase().includes("hindi") ? "hi"
     : text === "lang_mr" || text.toLowerCase().includes("marathi") ? "mr"
     : text === "lang_ta" || text.toLowerCase().includes("tamil") ? "ta"
     : "en";
 
-  await safeUpdate(whatsappNumber, {
+  await safeUpdate(identifier, {
     language: lang, onboardingStep: 2,
     onboardingData: { ...data, language: lang },
   });
@@ -109,14 +186,21 @@ async function processLanguage(whatsappNumber: string, text: string, data: Recor
     : lang === "mr" ? "छान! तुमचे पूर्ण नाव काय आहे?"
     : "Great! What is your full name?";
 
-  await messagingRouter.sendText(whatsappNumber, msg, true);
+  const patientId = await getPatientIdFromIdentifier(identifier);
+  if (!patientId) return;
+  await messagingRouter.sendText(patientId, msg);
 }
 
 // ─── Step 2 → 3: Name entered ──────────────────────────────────────────────────
-async function processName(whatsappNumber: string, patient: Patient, name: string, data: Record<string, any>) {
+async function processName(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string },
+  patient: Patient,
+  name: string,
+  data: Record<string, any>
+) {
   const cleanName = name.trim() || "Friend";
 
-  await safeUpdate(whatsappNumber, {
+  await safeUpdate(identifier, {
     name: cleanName, onboardingStep: 3,
     onboardingData: { ...data, name: cleanName },
   });
@@ -126,18 +210,23 @@ async function processName(whatsappNumber: string, patient: Patient, name: strin
     ? `${cleanName} जी, शुक्रिया। 🙏\n\nआपको कौन सा कैंसर है? नीचे से चुनें:`
     : `Thank you, ${cleanName}. 🙏\n\nWhat type of cancer are you being treated for? Choose below:`;
 
-  // Send as list for Telegram
-  await messagingRouter.sendList(whatsappNumber, intro, "Select type",
-    [{ title: "Cancer Types", rows: CANCER_TYPES }],
-    true
+  const patientId = await getPatientIdFromIdentifier(identifier);
+  if (!patientId) return;
+  await messagingRouter.sendList(patientId, intro, "Select type",
+    [{ title: "Cancer Types", rows: CANCER_TYPES }]
   );
 }
 
 // ─── Step 3 → 4: Cancer type chosen ───────────────────────────────────────────
-async function processCancerType(whatsappNumber: string, patient: Patient, text: string, data: Record<string, any>) {
+async function processCancerType(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string },
+  patient: Patient,
+  text: string,
+  data: Record<string, any>
+) {
   const cancerType = CANCER_TYPES.find(c => c.id === text || c.title.toLowerCase() === text.toLowerCase())?.title || text;
 
-  await safeUpdate(whatsappNumber, {
+  await safeUpdate(identifier, {
     cancerType, onboardingStep: 4,
     onboardingData: { ...data, cancerType },
   });
@@ -147,17 +236,23 @@ async function processCancerType(whatsappNumber: string, patient: Patient, text:
     ? `ठीक है। आपका treatment protocol क्या है?\nनीचे से चुनें, या type करें:`
     : `Got it. What is your treatment protocol?\nChoose below, or type it:`;
 
-  await messagingRouter.sendList(whatsappNumber, msg, "Select protocol",
-    [{ title: "Treatment Protocols", rows: PROTOCOLS }],
-    true
+  const patientId = await getPatientIdFromIdentifier(identifier);
+  if (!patientId) return;
+  await messagingRouter.sendList(patientId, msg, "Select protocol",
+    [{ title: "Treatment Protocols", rows: PROTOCOLS }]
   );
 }
 
 // ─── Step 4 → 5: Protocol chosen ──────────────────────────────────────────────
-async function processProtocol(whatsappNumber: string, patient: Patient, text: string, data: Record<string, any>) {
+async function processProtocol(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string },
+  patient: Patient,
+  text: string,
+  data: Record<string, any>
+) {
   const protocol = PROTOCOLS.find(p => p.id === text)?.id || text.toUpperCase().trim();
 
-  await safeUpdate(whatsappNumber, {
+  await safeUpdate(identifier, {
     treatmentProtocol: protocol, onboardingStep: 5,
     onboardingData: { ...data, protocol },
   });
@@ -167,11 +262,18 @@ async function processProtocol(whatsappNumber: string, patient: Patient, text: s
     ? `समझ गया। आपका पहला cycle कब शुरू हुआ?\nजैसे: 15 April 2025\n\nऔर अभी कौन से cycle में हैं? (1, 2, 3...)`
     : `Got it. When did your first treatment cycle start?\nLike: 15 April 2025\n\nAnd which cycle are you on now? (1, 2, 3...)`;
 
-  await messagingRouter.sendText(whatsappNumber, msg, true);
+  const patientId = await getPatientIdFromIdentifier(identifier);
+  if (!patientId) return;
+  await messagingRouter.sendText(patientId, msg);
 }
 
 // ─── Step 5 → 6: Cycle info ────────────────────────────────────────────────────
-async function processCycleInfo(whatsappNumber: string, patient: Patient, text: string, data: Record<string, any>) {
+async function processCycleInfo(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string },
+  patient: Patient,
+  text: string,
+  data: Record<string, any>
+) {
   const cycleMatch = text.match(/\b([1-9]|1[0-2])\b/);
   const currentCycle = cycleMatch ? parseInt(cycleMatch[1]!) : 1;
 
@@ -182,7 +284,7 @@ async function processCycleInfo(whatsappNumber: string, patient: Patient, text: 
     if (cycleStartDate > new Date()) cycleStartDate.setFullYear(cycleStartDate.getFullYear() - 1);
   }
 
-  await safeUpdate(whatsappNumber, {
+  await safeUpdate(identifier, {
     currentCycle, cycleStartDate, onboardingStep: 6,
     onboardingData: { ...data, currentCycle, cycleStartDate: cycleStartDate.toISOString() },
   });
@@ -192,16 +294,23 @@ async function processCycleInfo(whatsappNumber: string, patient: Patient, text: 
     ? `Cycle ${currentCycle} — ठीक है। 👍\n\nआप कौन से hospital में treatment ले रहे हैं?\nऔर आपके doctor का नाम क्या है?\n\nजैसे: Kokilaben Hospital, Dr. Priya Sharma`
     : `Cycle ${currentCycle} — noted. 👍\n\nWhich hospital are you receiving treatment at?\nAnd your doctor's name?\n\nExample: Kokilaben Hospital, Dr. Priya Sharma`;
 
-  await messagingRouter.sendText(whatsappNumber, msg, true);
+  const patientId = await getPatientIdFromIdentifier(identifier);
+  if (!patientId) return;
+  await messagingRouter.sendText(patientId, msg);
 }
 
 // ─── Step 6 → 7: Hospital & doctor ────────────────────────────────────────────
-async function processHospital(whatsappNumber: string, patient: Patient, text: string, data: Record<string, any>) {
+async function processHospital(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string },
+  patient: Patient,
+  text: string,
+  data: Record<string, any>
+) {
   const parts = text.split(/,\s*dr\.?\s*/i);
   const hospitalName = parts[0]?.trim() || text.trim();
   const doctorName = parts[1] ? `Dr. ${parts[1].trim()}` : "Not specified";
 
-  await safeUpdate(whatsappNumber, {
+  await safeUpdate(identifier, {
     hospitalName, doctorName, onboardingStep: 7,
     onboardingData: { ...data, hospitalName, doctorName },
   });
@@ -211,11 +320,18 @@ async function processHospital(whatsappNumber: string, patient: Patient, text: s
     ? `${hospitalName} — नोट किया। 👍\n\nक्या आपके साथ कोई caregiver है जो आपकी देखभाल करते हैं?\n(जैसे पति/पत्नी, बच्चा, माता-पिता)\n\nउनका नाम और phone number बताइए।\nया "Skip" लिखें।`
     : `${hospitalName} — noted. 👍\n\nDo you have a caregiver who looks after you?\n(Like your spouse, child, or parent)\n\nShare their name and phone number.\nOr type "Skip" to continue.`;
 
-  await messagingRouter.sendText(whatsappNumber, msg, true);
+  const patientId = await getPatientIdFromIdentifier(identifier);
+  if (!patientId) return;
+  await messagingRouter.sendText(patientId, msg);
 }
 
 // ─── Step 7 → 8: Caregiver ─────────────────────────────────────────────────────
-async function processCaregiver(whatsappNumber: string, patient: Patient, text: string, data: Record<string, any>) {
+async function processCaregiver(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string },
+  patient: Patient,
+  text: string,
+  data: Record<string, any>
+) {
   let caregiverData = null;
 
   if (!text.toLowerCase().includes("skip")) {
@@ -240,42 +356,52 @@ async function processCaregiver(whatsappNumber: string, patient: Patient, text: 
         });
         caregiverData = { name: caregiverName, number: caregiverNumber };
         console.log(`✅ Caregiver enrolled: ${caregiverName} (${caregiverNumber})`);
-        // Note: caregiver notification skipped for Telegram
-        // (they use phone numbers, not Telegram chat IDs)
       } catch (err: any) {
         console.error(`❌ Caregiver upsert failed: ${err?.message}`);
       }
     }
   }
 
-  await safeUpdate(whatsappNumber, {
+  await safeUpdate(identifier, {
     onboardingStep: 8,
     onboardingData: { ...data, caregiver: caregiverData },
   });
 
-  await sendConsentMessage(whatsappNumber, patient.language);
+  await sendConsentMessage(identifier, patient.language);
 }
 
 // ─── Step 8: Consent ───────────────────────────────────────────────────────────
-async function sendConsentMessage(whatsappNumber: string, lang: string) {
+async function sendConsentMessage(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string },
+  lang: string
+) {
   const msg = lang === "hi"
     ? `आखिरी चीज़ — आपकी privacy:\n\n✅ आपकी जानकारी सिर्फ आपकी care के लिए\n✅ कभी बिना permission share नहीं होगी\n✅ सिर्फ doctor और caregiver को ज़रूरी updates\n\nAgree करके आगे बढ़ें:`
     : `Last step — your privacy:\n\n✅ Your info is only used for your care\n✅ Never shared without your permission\n✅ Only your doctor & caregiver get updates\n\nTap to continue:`;
 
-  await messagingRouter.sendButtons(whatsappNumber, msg, [
+  const patientId = await getPatientIdFromIdentifier(identifier);
+  if (!patientId) return;
+  await messagingRouter.sendButtons(patientId, msg, [
     { id: "consent_accept", title: "✅ Accept & Continue" },
     { id: "consent_decline", title: "Not now" },
-  ], true);
+  ]);
 }
 
 // ─── Step 8 → 9: Consent given ────────────────────────────────────────────────
-async function processConsent(whatsappNumber: string, patient: Patient, text: string, data: Record<string, any>) {
+async function processConsent(
+  identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string },
+  patient: Patient,
+  text: string,
+  data: Record<string, any>
+) {
   if (text === "consent_decline" || text.toLowerCase().includes("not now")) {
-    await messagingRouter.sendText(whatsappNumber, "Okay — whenever you're ready, just message me. I'm here. 💙", true);
+    const patientId = await getPatientIdFromIdentifier(identifier);
+    if (!patientId) return;
+    await messagingRouter.sendText(patientId, "Okay — whenever you're ready, just message me. I'm here. 💙");
     return;
   }
 
-  await safeUpdate(whatsappNumber, {
+  await safeUpdate(identifier, {
     onboardingStep: 9,
     onboardingData: { ...data, consentGiven: true },
   });
@@ -287,7 +413,9 @@ async function processConsent(whatsappNumber: string, patient: Patient, text: st
     ? `${name} जी, आपका स्वागत है! 💙\n\nमैं अब आपके साथ हूँ। कल सुबह से रोज़ आपका हाल पूछूँगा।\n\nअगर रात को नींद न आए, या कुछ भी पूछना हो — बस message करें। 🙏\n\nआज के लिए — अच्छे से आराम करें।`
     : `Welcome, ${name}! 💙\n\nI'm here with you now. Starting tomorrow morning, I'll check in with you daily.\n\nIf you can't sleep or need anything — just message me. I'm always here. 🙏\n\nFor today — rest well.`;
 
-  await messagingRouter.sendText(whatsappNumber, welcome, true);
+  const patientId = await getPatientIdFromIdentifier(identifier);
+  if (!patientId) return;
+  await messagingRouter.sendText(patientId, welcome);
 
   // Schedule daily check-in (best effort — don't crash if queue fails)
   try {

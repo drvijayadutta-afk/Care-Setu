@@ -1,5 +1,5 @@
 import { prisma } from "../../db/client";
-import { sendText, sendListMessage, sendButtonMessage } from "../../webhook/sender";
+import { messagingRouter } from "../../messaging/router";
 import { askClaudeJSON } from "../../integrations/claude";
 import { INTENT_CLASSIFIER_PROMPT } from "../../ai/prompts";
 import * as Practo from "../../integrations/practo";
@@ -35,8 +35,8 @@ export async function handleAppointmentRequest(
   }
 
   if (text === "appt_different_date") {
-    await sendText(
-      patient.whatsappNumber,
+    await messagingRouter.sendText(
+      patient.id,
       patient.language === "hi"
         ? "Kaunsi date prefer karenge? (Jaise: '20 May' ya 'agle hafte')"
         : "What date would you prefer? (e.g., '20 May' or 'next week')"
@@ -46,8 +46,8 @@ export async function handleAppointmentRequest(
 
   if (text === "appt_cancel") {
     pendingBookings.delete(patient.whatsappNumber);
-    await sendText(
-      patient.whatsappNumber,
+    await messagingRouter.sendText(
+      patient.id,
       patient.language === "hi"
         ? "Theek hai — appointment booking cancel kiya. Jab zarurat ho, bata dena."
         : "Okay — appointment booking cancelled. Let me know when you need it."
@@ -80,8 +80,8 @@ Respond with JSON only.`,
 async function fetchAndPresentSlots(patient: Patient, intent: AppointmentIntent) {
   const lang = patient.language;
 
-  await sendText(
-    patient.whatsappNumber,
+  await messagingRouter.sendText(
+    patient.id,
     lang === "hi"
       ? "Ek second — available slots dhundh raha hun... 🔍"
       : "One moment — looking for available slots... 🔍"
@@ -120,8 +120,8 @@ async function fetchAndPresentSlots(patient: Patient, intent: AppointmentIntent)
   if (slots.length === 0) {
     // Fallback: create coordinator task and notify patient
     await createCoordinatorBookingTask(patient, intent);
-    await sendText(
-      patient.whatsappNumber,
+    await messagingRouter.sendText(
+      patient.id,
       lang === "hi"
         ? `${patient.doctorName} ke saath appointment book kar raha hun.\nHum 2 ghante mein confirm karenge. 📅\n\nAapko koi kuch nahi karna — hum batayenge.`
         : `Booking an appointment with ${patient.doctorName}.\nWe'll confirm within 2 hours. 📅\n\nYou don't need to do anything — we'll let you know.`
@@ -147,7 +147,7 @@ async function fetchAndPresentSlots(patient: Patient, intent: AppointmentIntent)
       ? `${patient.doctorName} ke saath available slots:\n(${patient.hospitalName})`
       : `Available slots with ${patient.doctorName}:\n(${patient.hospitalName})`;
 
-  await sendListMessage(patient.whatsappNumber, bodyText, "Select a slot", [
+  await messagingRouter.sendList(patient.id, bodyText, "Select a slot", [
     { title: "Available Times", rows },
   ]);
 }
@@ -155,8 +155,8 @@ async function fetchAndPresentSlots(patient: Patient, intent: AppointmentIntent)
 async function confirmBooking(patient: Patient, slotIndex: number) {
   const pending = pendingBookings.get(patient.whatsappNumber);
   if (!pending) {
-    await sendText(
-      patient.whatsappNumber,
+    await messagingRouter.sendText(
+      patient.id,
       patient.language === "hi"
         ? "Session expire ho gaya. Dobara try karein."
         : "Session expired. Please try again."
@@ -166,14 +166,14 @@ async function confirmBooking(patient: Patient, slotIndex: number) {
 
   const slot = pending.slots[slotIndex];
   if (!slot) {
-    await sendText(patient.whatsappNumber, "Invalid slot. Please try again.");
+    await messagingRouter.sendText(patient.id, "Invalid slot. Please try again.");
     return;
   }
 
   const lang = patient.language;
 
-  await sendText(
-    patient.whatsappNumber,
+  await messagingRouter.sendText(
+    patient.id,
     lang === "hi" ? "Book kar raha hun... ⏳" : "Booking your appointment... ⏳"
   );
 
@@ -200,8 +200,8 @@ async function confirmBooking(patient: Patient, slotIndex: number) {
   } catch (err) {
     console.error("Booking API failed:", err);
     await createCoordinatorBookingTask(patient, pending.intent, slot);
-    await sendText(
-      patient.whatsappNumber,
+    await messagingRouter.sendText(
+      patient.id,
       lang === "hi"
         ? "Booking confirm ho rahi hai — thodi der mein update milega. 📅"
         : "Booking is being confirmed — you'll get an update shortly. 📅"
@@ -235,14 +235,15 @@ async function confirmBooking(patient: Patient, slotIndex: number) {
       ? `✅ Appointment confirm ho gaya!\n\n👨‍⚕️ ${slot.doctorName || patient.doctorName}\n🏥 ${patient.hospitalName}\n📅 ${formatAppointmentDate(scheduledAt)}\n\nMaine note kar liya. Reminders milenge:\n• Kal (48 ghante pehle)\n• Din par (24 ghante pehle)\n• 2 ghante pehle\n\nAapke caregiver ko bhi bata diya. 💙`
       : `✅ Appointment confirmed!\n\n👨‍⚕️ ${slot.doctorName || patient.doctorName}\n🏥 ${patient.hospitalName}\n📅 ${formatAppointmentDate(scheduledAt)}\n\nI've noted this. You'll get reminders:\n• Tomorrow (48 hours before)\n• Day of (24 hours before)\n• 2 hours before\n\nYour caregiver has been notified too. 💙`;
 
-  await sendText(patient.whatsappNumber, confirmMsg);
+  await messagingRouter.sendText(patient.id, confirmMsg);
 
   // Notify caregiver
   const caregiver = await prisma.caregiver.findUnique({ where: { patientId: patient.id } });
   if (caregiver?.isEnrolled) {
-    await sendText(
+    await messagingRouter.sendText(
       caregiver.whatsappNumber,
-      `📅 ${patient.name} ka appointment book ho gaya:\n${slot.doctorName || patient.doctorName} — ${patient.hospitalName}\n${formatAppointmentDate(scheduledAt)}`
+      `📅 ${patient.name} ka appointment book ho gaya:\n${slot.doctorName || patient.doctorName} — ${patient.hospitalName}\n${formatAppointmentDate(scheduledAt)}`,
+      true
     );
   }
 
@@ -294,9 +295,10 @@ async function createCoordinatorBookingTask(
 
   // Alert coordinator
   if (process.env.COORDINATOR_WHATSAPP_NUMBER) {
-    await sendText(
+    await messagingRouter.sendText(
       process.env.COORDINATOR_WHATSAPP_NUMBER,
-      `📋 BOOKING TASK\nPatient: ${patient.name} (${patient.whatsappNumber})\nDoctor: ${patient.doctorName} @ ${patient.hospitalName}\nType: ${intent.type} | Urgency: ${intent.urgency}\n\nPlease call to book and update system.`
+      `📋 BOOKING TASK\nPatient: ${patient.name} (${patient.whatsappNumber})\nDoctor: ${patient.doctorName} @ ${patient.hospitalName}\nType: ${intent.type} | Urgency: ${intent.urgency}\n\nPlease call to book and update system.`,
+      true
     );
   }
 }

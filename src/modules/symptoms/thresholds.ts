@@ -1,5 +1,5 @@
 import { prisma } from "../../db/client";
-import { sendText } from "../../webhook/sender";
+import { messagingRouter } from "../../messaging/router";
 import type { Patient, Checkin } from "@prisma/client";
 
 interface ThresholdRule {
@@ -242,14 +242,14 @@ export async function evaluateThresholds(
       .replace("[COORDINATOR_NUMBER]", process.env.COORDINATOR_WHATSAPP_NUMBER || "your care team")
       .replace("[HOSPITAL_NUMBER]", "your hospital helpline");
 
-    await sendText(patient.whatsappNumber, patientMsg);
+    await messagingRouter.sendText(patient.id, patientMsg);
 
     // Notify caregiver
     const caregiver = await prisma.caregiver.findUnique({
       where: { patientId: patient.id },
     });
     if (caregiver?.isEnrolled) {
-      await sendText(caregiver.whatsappNumber, rule.caregiverMessage);
+      await messagingRouter.sendText(caregiver.whatsappNumber, rule.caregiverMessage, true);
       await prisma.alert.update({
         where: { id: alert.id },
         data: { caregiverNotified: true },
@@ -259,7 +259,7 @@ export async function evaluateThresholds(
     // Notify coordinator for urgent/caution with flag
     if (rule.notifyCoordinator && process.env.COORDINATOR_WHATSAPP_NUMBER) {
       const coordMsg = `🚨 Alert [${rule.severity.toUpperCase()}]\nPatient: ${patient.name} (${patient.whatsappNumber})\nTreatment: ${patient.treatmentProtocol} Cycle ${patient.currentCycle} Day ${cycleDay}\nRule: ${rule.description}\nSymptoms: ${symptoms.join(", ")}\nScore: ${score}/5`;
-      await sendText(process.env.COORDINATOR_WHATSAPP_NUMBER, coordMsg);
+      await messagingRouter.sendText(process.env.COORDINATOR_WHATSAPP_NUMBER, coordMsg, true);
       await prisma.alert.update({
         where: { id: alert.id },
         data: { coordinatorNotified: true },

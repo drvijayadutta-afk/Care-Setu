@@ -1,5 +1,5 @@
 import { prisma } from "../../db/client";
-import { sendText } from "../../webhook/sender";
+import { messagingRouter } from "../../messaging/router";
 import { askClaudeWithHistory } from "../../integrations/claude";
 import {
   EMOTIONAL_SUPPORT_DAYTIME_PROMPT,
@@ -71,12 +71,12 @@ export async function handleEmotionalSupport(
   // Check if Claude flagged a crisis in night mode
   if (response.includes("##CRISIS##")) {
     const cleanResponse = response.replace("##CRISIS##", "").trim();
-    await sendText(patient.whatsappNumber, cleanResponse);
+    await messagingRouter.sendText(patient.id, cleanResponse);
     await handleCrisis(patient);
     return;
   }
 
-  await sendText(patient.whatsappNumber, response);
+  await messagingRouter.sendText(patient.id, response);
 
   // Store the response
   await prisma.conversation.create({
@@ -109,7 +109,7 @@ async function handleCrisis(patient: Patient) {
       ? `Aap jo feel kar rahe hain, wo real hai. Aur aap akele nahi hain. 💙\n\nAbhi ek kaam karein — apne kisi karibi ko call karein, ya humein call karein:\n📞 ${coordinatorNumber || "apne care coordinator ko"}\n\nYe moment guzar jaega. Hum yahan hain.`
       : `What you're feeling is real. And you are not alone. 💙\n\nDo one thing right now — call someone close to you, or call us:\n📞 ${coordinatorNumber || "your care coordinator"}\n\nThis moment will pass. We are here.`;
 
-  await sendText(patient.whatsappNumber, crisisMsg);
+  await messagingRouter.sendText(patient.id, crisisMsg);
 
   // Create urgent alert
   await prisma.alert.create({
@@ -123,18 +123,20 @@ async function handleCrisis(patient: Patient) {
 
   // Notify coordinator immediately
   if (coordinatorNumber) {
-    await sendText(
+    await messagingRouter.sendText(
       coordinatorNumber,
-      `🚨 URGENT — CRISIS ALERT\n\nPatient: ${patient.name}\nWhatsApp: +${patient.whatsappNumber}\nTreatment: ${patient.treatmentProtocol} Cycle ${patient.currentCycle}\n\nPatient expressed distress suggesting possible crisis.\nPlease call them within the next 15 minutes.`
+      `🚨 URGENT — CRISIS ALERT\n\nPatient: ${patient.name}\nWhatsApp: +${patient.whatsappNumber}\nTreatment: ${patient.treatmentProtocol} Cycle ${patient.currentCycle}\n\nPatient expressed distress suggesting possible crisis.\nPlease call them within the next 15 minutes.`,
+      true
     );
   }
 
   // Notify caregiver
   const caregiver = await prisma.caregiver.findUnique({ where: { patientId: patient.id } });
   if (caregiver?.isEnrolled) {
-    await sendText(
+    await messagingRouter.sendText(
       caregiver.whatsappNumber,
-      `💙 Please check on ${patient.name} right now. They reached out and seem to be having a very difficult time emotionally. A gentle call or visit would mean a lot.`
+      `💙 Please check on ${patient.name} right now. They reached out and seem to be having a very difficult time emotionally. A gentle call or visit would mean a lot.`,
+      true
     );
   }
 }
@@ -174,9 +176,10 @@ async function trackNightDistress(patientId: string) {
           },
         });
 
-        await sendText(
+        await messagingRouter.sendText(
           caregiver.whatsappNumber,
-          `Ek baat — ${(await prisma.patient.findUnique({ where: { id: patientId } }))?.name} pichhle kuch raaton mein neend nahi aa rahi. Agar ho sake to ek baar unse poochhein ke neend kaisi hai. 💙`
+          `Ek baat — ${(await prisma.patient.findUnique({ where: { id: patientId } }))?.name} pichhle kuch raaton mein neend nahi aa rahi. Agar ho sake to ek baar unse poochhein ke neend kaisi hai. 💙`,
+          true
         );
       }
     }
