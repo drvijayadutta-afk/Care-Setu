@@ -6,6 +6,8 @@ import {
   handleWebhookVerification,
   handleWebhookMessage,
 } from "./webhook/handler";
+import { handleTelegramWebhook } from "./telegram/handler";
+import { setWebhook as setTelegramWebhook } from "./telegram/sender";
 import {
   checkinWorker,
   appointmentWorker,
@@ -31,6 +33,11 @@ fastify.get("/webhook", handleWebhookVerification);
 fastify.post("/webhook", {
   config: { rawBody: true },
   handler: handleWebhookMessage,
+});
+
+// Telegram incoming messages (POST)
+fastify.post("/webhook/telegram", {
+  handler: handleTelegramWebhook,
 });
 
 // Schedule recurring cron jobs on startup
@@ -81,6 +88,15 @@ async function start() {
 
     await scheduleCronJobs();
     startAisensyPolling();
+
+    // Auto-register Telegram webhook if token is set
+    if (process.env.TELEGRAM_BOT_TOKEN) {
+      const backendUrl = process.env.BACKEND_URL || `https://care-setu-backend.onrender.com`;
+      await setTelegramWebhook(backendUrl).catch((err) =>
+        console.error("Failed to set Telegram webhook:", err)
+      );
+      console.log(`🤖 Telegram webhook registered: ${backendUrl}/webhook/telegram`);
+    }
 
     console.log(`🚀 Cancer AI server running on port ${process.env.PORT || 3000}`);
     console.log(`📱 WhatsApp webhook: /webhook`);
