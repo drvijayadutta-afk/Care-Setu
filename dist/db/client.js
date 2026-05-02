@@ -4,15 +4,26 @@ exports.prisma = void 0;
 const client_1 = require("@prisma/client");
 const pg_1 = require("pg");
 const adapter_pg_1 = require("@prisma/adapter-pg");
+const env_1 = require("../config/env");
 const globalForPrisma = globalThis;
 function createPrismaClient() {
     const dbUrl = process.env.DATABASE_URL || "";
-    // Render internal URLs have no domain suffix — no SSL needed
-    // External URLs contain .render.com or .supabase.co — need SSL
-    const needsSsl = dbUrl.includes(".render.com") ||
-        dbUrl.includes(".supabase.co") ||
-        dbUrl.includes("supabase");
-    console.log(`🔌 DB connecting... SSL: ${needsSsl ? "YES" : "NO (internal)"}`);
+    // Determine SSL requirement based on DATABASE_SSL config
+    let needsSsl = false;
+    if (env_1.config.databaseSsl === "require") {
+        needsSsl = true;
+    }
+    else if (env_1.config.databaseSsl === "disable") {
+        needsSsl = false;
+    }
+    else {
+        // auto-detect: Render internal URLs have no domain suffix — no SSL needed
+        // External URLs contain .render.com or .supabase.co — need SSL
+        needsSsl = dbUrl.includes(".render.com") ||
+            dbUrl.includes(".supabase.co") ||
+            dbUrl.includes("supabase");
+    }
+    console.log(`🔌 DB connecting... SSL: ${needsSsl ? "YES" : "NO"} (${env_1.config.databaseSsl})`);
     const pool = new pg_1.Pool({
         connectionString: dbUrl,
         max: 3,

@@ -4,6 +4,7 @@ import type { AiPort } from "../../ports/ai";
 import type { StoragePort } from "../../ports/storage";
 import { deleteFile } from "../../integrations/supabase-storage";
 import { extractDocument } from "../services/extract-document.service";
+import { approveExtractionDraft, rejectExtractionDraft } from "../services/approve-extraction-draft.service";
 import { prisma } from "../../db/client";
 
 export function registerRecordRoutes(
@@ -366,5 +367,50 @@ export function registerRecordRoutes(
     const { id } = request.params as { id: string };
     await recordRepo.careTeam.delete(id);
     return { ok: true };
+  });
+
+  // ─── Extraction Drafts (M3 — review queue) ────────────────────────────────
+  fastify.get("/patients/:id/extraction-drafts", { preHandler: authScope }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const drafts = await prisma.extractedRecordDraft.findMany({
+      where: { patientId: id, status: "pending" },
+      orderBy: { createdAt: "desc" },
+    });
+    return drafts;
+  });
+
+  fastify.patch("/extraction-drafts/:id/approve", { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = (request as any).user as { sub: string };
+    try {
+      await approveExtractionDraft(id, recordRepo, user.sub);
+      return { ok: true };
+    } catch (error: any) {
+      if (error.message === "Draft not found") {
+        return reply.status(404).send({ error: "Draft not found" });
+      }
+      if (error.message === "Draft has already been reviewed") {
+        return reply.status(400).send({ error: "Draft has already been reviewed" });
+      }
+      throw error;
+    }
+  });
+
+  fastify.patch("/extraction-drafts/:id/reject", { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { reason } = request.body as { reason: string };
+    const user = (request as any).user as { sub: string };
+    try {
+      await rejectExtractionDraft(id, reason, user.sub);
+      return { ok: true };
+    } catch (error: any) {
+      if (error.message === "Draft not found") {
+        return reply.status(404).send({ error: "Draft not found" });
+      }
+      if (error.message === "Draft has already been reviewed") {
+        return reply.status(400).send({ error: "Draft has already been reviewed" });
+      }
+      throw error;
+    }
   });
 }

@@ -58,6 +58,7 @@ model Patient {
   clinicalNotes     ClinicalNote[]
   documents         PatientDocument[]
   careTeamMembers   CareTeamMember[]
+  extractedDrafts   ExtractedRecordDraft[]
 }
 
 model Caregiver {
@@ -378,6 +379,21 @@ model CareTeamMember {
   isPrimary    Boolean   @default(false)
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+}
+
+model ExtractedRecordDraft {
+  id            String    @id @default(uuid())
+  patientId     String
+  documentId    String
+  category      String    // LAB_REPORT, IMAGING, PATHOLOGY
+  extractedData Json      // AI-extracted structured content awaiting review
+  status        String    @default("pending") // pending | approved | rejected
+  rejectionReason String?
+  reviewedAt    DateTime?
+  reviewedBy    String?   // Coordinator ID who approved/rejected
+  createdAt     DateTime  @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id])
 }

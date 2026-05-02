@@ -20,6 +20,11 @@ const envSchema = z.object({
     .optional()
     .transform((v) => v === "true")
     .default(false),
+  // Database SSL mode: "require" (enforce SSL), "disable" (no SSL), "auto" (detect from URL)
+  DATABASE_SSL: z
+    .enum(["require", "disable", "auto"])
+    .optional()
+    .default("auto"),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -74,6 +79,7 @@ export const config = {
   jwtSecret: resolveJwtSecret(),
   allowedOrigins: env.ALLOWED_ORIGINS,
   patientScopeEnforce: env.PATIENT_SCOPE_ENFORCE,
+  databaseSsl: env.DATABASE_SSL,
 } as const;
 
 export type AppConfig = typeof config;
