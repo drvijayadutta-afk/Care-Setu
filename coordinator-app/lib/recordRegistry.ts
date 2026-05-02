@@ -12,7 +12,7 @@ export type RecordTabId = 'overview' | 'conversations' | 'checkins' | 'appointme
 export interface TabConfig {
   id: RecordTabId;
   label: string;
-  icon: ReactNode;
+  iconType: string;
   section?: 'overview' | 'records' | 'interactions';
 }
 
@@ -20,73 +20,92 @@ export const RECORD_REGISTRY: Record<RecordTabId, TabConfig> = {
   overview: {
     id: 'overview',
     label: 'Overview',
-    icon: <FiActivity />,
+    iconType: 'FiActivity',
     section: 'overview',
   },
   conversations: {
     id: 'conversations',
     label: 'Conversations',
-    icon: <FiMessageCircle />,
+    iconType: 'FiMessageCircle',
     section: 'interactions',
   },
   checkins: {
     id: 'checkins',
     label: 'Check-ins',
-    icon: <FiCheckCircle />,
+    iconType: 'FiCheckCircle',
     section: 'interactions',
   },
   appointments: {
     id: 'appointments',
     label: 'Appointments',
-    icon: <FiCalendar />,
+    iconType: 'FiCalendar',
     section: 'interactions',
   },
   labs: {
     id: 'labs',
     label: 'Lab Results',
-    icon: <FiBarChart2 />,
+    iconType: 'FiBarChart2',
     section: 'records',
   },
   imaging: {
     id: 'imaging',
     label: 'Imaging',
-    icon: <FiImage />,
+    iconType: 'FiImage',
     section: 'records',
   },
   pathology: {
     id: 'pathology',
     label: 'Pathology',
-    icon: <FiFileText />,
+    iconType: 'FiFileText',
     section: 'records',
   },
   vitals: {
     id: 'vitals',
     label: 'Vitals',
-    icon: <FiActivity />,
+    iconType: 'FiActivity',
     section: 'records',
   },
   notes: {
     id: 'notes',
     label: 'Clinical Notes',
-    icon: <FiFileText />,
+    iconType: 'FiFileText',
     section: 'records',
   },
   documents: {
     id: 'documents',
     label: 'Documents',
-    icon: <FiUpload />,
+    iconType: 'FiUpload',
     section: 'records',
   },
   'care-team': {
     id: 'care-team',
     label: 'Care Team',
-    icon: <FiUsers />,
+    iconType: 'FiUsers',
     section: 'interactions',
   },
 };
 
-/* Build ordered tab list from registry */
-export const TABS = Object.values(RECORD_REGISTRY);
+const ICON_MAP: Record<string, ReactNode> = {
+  FiActivity: <FiActivity />,
+  FiMessageCircle: <FiMessageCircle />,
+  FiCheckCircle: <FiCheckCircle />,
+  FiCalendar: <FiCalendar />,
+  FiBarChart2: <FiBarChart2 />,
+  FiImage: <FiImage />,
+  FiFileText: <FiFileText />,
+  FiUpload: <FiUpload />,
+  FiUsers: <FiUsers />,
+};
+
+export interface TabWithIcon extends TabConfig {
+  icon: ReactNode;
+}
+
+/* Build ordered tab list from registry with icons */
+export const TABS: TabWithIcon[] = Object.values(RECORD_REGISTRY).map(tab => ({
+  ...tab,
+  icon: ICON_MAP[tab.iconType],
+}));
 
 /* Utility: Group tabs by section */
 export function getTabsBySection(section: 'overview' | 'records' | 'interactions'): TabConfig[] {

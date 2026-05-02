@@ -163,22 +163,22 @@ export default function PatientDetailPage() {
                 <LabsTab patientId={patientId} labResults={labResults} onLabsUpdate={setLabResults} />
               )}
               {activeTab === 'imaging' && (
-                <ImagingTab patientId={patientId} imaging={imaging} />
+                <ImagingTab patientId={patientId} imaging={imaging} onImagingUpdate={setImaging} />
               )}
               {activeTab === 'pathology' && (
-                <PathologyTab patientId={patientId} pathology={pathology} />
+                <PathologyTab patientId={patientId} pathology={pathology} onPathologyUpdate={setPathology} />
               )}
               {activeTab === 'vitals' && (
-                <VitalsTab patientId={patientId} vitals={vitals} />
+                <VitalsTab patientId={patientId} vitals={vitals} onVitalsUpdate={setVitals} />
               )}
               {activeTab === 'notes' && (
-                <NotesTab patientId={patientId} notes={notes} />
+                <NotesTab patientId={patientId} notes={notes} onNotesUpdate={setNotes} />
               )}
               {activeTab === 'documents' && (
-                <DocumentsTab patientId={patientId} documents={documents} />
+                <DocumentsTab patientId={patientId} documents={documents} onDocumentsUpdate={setDocuments} />
               )}
               {activeTab === 'care-team' && (
-                <CareTeamTab patientId={patientId} careTeam={careTeam} />
+                <CareTeamTab patientId={patientId} careTeam={careTeam} onCareTeamUpdate={setCareTeam} />
               )}
             </div>
           </div>
