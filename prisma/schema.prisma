@@ -9,6 +9,8 @@ datasource db {
 model Patient {
   id                String   @id @default(uuid())
   whatsappNumber    String   @unique
+  telegramChatId    String?  @unique
+  preferredMessagingChannel String? // "whatsapp" or "telegram"; detected from env if not set
   name              String
   language          String   @default("hi")
   cancerType        String

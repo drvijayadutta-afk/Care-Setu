@@ -1,5 +1,5 @@
 import { prisma } from "../../db/client";
-import { sendText, sendButtonMessage, sendListMessage } from "../../webhook/sender";
+import { messagingRouter } from "../../messaging/router";
 import type { Patient } from "@prisma/client";
 
 const CANCER_TYPES = [
@@ -85,11 +85,11 @@ async function sendStep1_Language(whatsappNumber: string) {
     console.error(`❌ Failed to create patient: ${err?.message}`);
   }
 
-  await sendButtonMessage(whatsappNumber, GREETINGS.en, [
+  await messagingRouter.sendButtons(whatsappNumber, GREETINGS.en, [
     { id: "lang_hi", title: "हिंदी" },
     { id: "lang_en", title: "English" },
     { id: "lang_mr", title: "मराठी" },
-  ]);
+  ], true);
 }
 
 // ─── Step 1 → 2: Language chosen ───────────────────────────────────────────────
@@ -109,7 +109,7 @@ async function processLanguage(whatsappNumber: string, text: string, data: Recor
     : lang === "mr" ? "छान! तुमचे पूर्ण नाव काय आहे?"
     : "Great! What is your full name?";
 
-  await sendText(whatsappNumber, msg);
+  await messagingRouter.sendText(whatsappNumber, msg, true);
 }
 
 // ─── Step 2 → 3: Name entered ──────────────────────────────────────────────────
@@ -127,8 +127,9 @@ async function processName(whatsappNumber: string, patient: Patient, name: strin
     : `Thank you, ${cleanName}. 🙏\n\nWhat type of cancer are you being treated for? Choose below:`;
 
   // Send as list for Telegram
-  await sendListMessage(whatsappNumber, intro, "Select type",
-    [{ title: "Cancer Types", rows: CANCER_TYPES }]
+  await messagingRouter.sendList(whatsappNumber, intro, "Select type",
+    [{ title: "Cancer Types", rows: CANCER_TYPES }],
+    true
   );
 }
 
@@ -146,8 +147,9 @@ async function processCancerType(whatsappNumber: string, patient: Patient, text:
     ? `ठीक है। आपका treatment protocol क्या है?\nनीचे से चुनें, या type करें:`
     : `Got it. What is your treatment protocol?\nChoose below, or type it:`;
 
-  await sendListMessage(whatsappNumber, msg, "Select protocol",
-    [{ title: "Treatment Protocols", rows: PROTOCOLS }]
+  await messagingRouter.sendList(whatsappNumber, msg, "Select protocol",
+    [{ title: "Treatment Protocols", rows: PROTOCOLS }],
+    true
   );
 }
 
@@ -165,7 +167,7 @@ async function processProtocol(whatsappNumber: string, patient: Patient, text: s
     ? `समझ गया। आपका पहला cycle कब शुरू हुआ?\nजैसे: 15 April 2025\n\nऔर अभी कौन से cycle में हैं? (1, 2, 3...)`
     : `Got it. When did your first treatment cycle start?\nLike: 15 April 2025\n\nAnd which cycle are you on now? (1, 2, 3...)`;
 
-  await sendText(whatsappNumber, msg);
+  await messagingRouter.sendText(whatsappNumber, msg, true);
 }
 
 // ─── Step 5 → 6: Cycle info ────────────────────────────────────────────────────
@@ -190,7 +192,7 @@ async function processCycleInfo(whatsappNumber: string, patient: Patient, text: 
     ? `Cycle ${currentCycle} — ठीक है। 👍\n\nआप कौन से hospital में treatment ले रहे हैं?\nऔर आपके doctor का नाम क्या है?\n\nजैसे: Kokilaben Hospital, Dr. Priya Sharma`
     : `Cycle ${currentCycle} — noted. 👍\n\nWhich hospital are you receiving treatment at?\nAnd your doctor's name?\n\nExample: Kokilaben Hospital, Dr. Priya Sharma`;
 
-  await sendText(whatsappNumber, msg);
+  await messagingRouter.sendText(whatsappNumber, msg, true);
 }
 
 // ─── Step 6 → 7: Hospital & doctor ────────────────────────────────────────────
@@ -209,7 +211,7 @@ async function processHospital(whatsappNumber: string, patient: Patient, text: s
     ? `${hospitalName} — नोट किया। 👍\n\nक्या आपके साथ कोई caregiver है जो आपकी देखभाल करते हैं?\n(जैसे पति/पत्नी, बच्चा, माता-पिता)\n\nउनका नाम और phone number बताइए।\nया "Skip" लिखें।`
     : `${hospitalName} — noted. 👍\n\nDo you have a caregiver who looks after you?\n(Like your spouse, child, or parent)\n\nShare their name and phone number.\nOr type "Skip" to continue.`;
 
-  await sendText(whatsappNumber, msg);
+  await messagingRouter.sendText(whatsappNumber, msg, true);
 }
 
 // ─── Step 7 → 8: Caregiver ─────────────────────────────────────────────────────
@@ -260,16 +262,16 @@ async function sendConsentMessage(whatsappNumber: string, lang: string) {
     ? `आखिरी चीज़ — आपकी privacy:\n\n✅ आपकी जानकारी सिर्फ आपकी care के लिए\n✅ कभी बिना permission share नहीं होगी\n✅ सिर्फ doctor और caregiver को ज़रूरी updates\n\nAgree करके आगे बढ़ें:`
     : `Last step — your privacy:\n\n✅ Your info is only used for your care\n✅ Never shared without your permission\n✅ Only your doctor & caregiver get updates\n\nTap to continue:`;
 
-  await sendButtonMessage(whatsappNumber, msg, [
+  await messagingRouter.sendButtons(whatsappNumber, msg, [
     { id: "consent_accept", title: "✅ Accept & Continue" },
     { id: "consent_decline", title: "Not now" },
-  ]);
+  ], true);
 }
 
 // ─── Step 8 → 9: Consent given ────────────────────────────────────────────────
 async function processConsent(whatsappNumber: string, patient: Patient, text: string, data: Record<string, any>) {
   if (text === "consent_decline" || text.toLowerCase().includes("not now")) {
-    await sendText(whatsappNumber, "Okay — whenever you're ready, just message me. I'm here. 💙");
+    await messagingRouter.sendText(whatsappNumber, "Okay — whenever you're ready, just message me. I'm here. 💙", true);
     return;
   }
 
@@ -285,7 +287,7 @@ async function processConsent(whatsappNumber: string, patient: Patient, text: st
     ? `${name} जी, आपका स्वागत है! 💙\n\nमैं अब आपके साथ हूँ। कल सुबह से रोज़ आपका हाल पूछूँगा।\n\nअगर रात को नींद न आए, या कुछ भी पूछना हो — बस message करें। 🙏\n\nआज के लिए — अच्छे से आराम करें।`
     : `Welcome, ${name}! 💙\n\nI'm here with you now. Starting tomorrow morning, I'll check in with you daily.\n\nIf you can't sleep or need anything — just message me. I'm always here. 🙏\n\nFor today — rest well.`;
 
-  await sendText(whatsappNumber, welcome);
+  await messagingRouter.sendText(whatsappNumber, welcome, true);
 
   // Schedule daily check-in (best effort — don't crash if queue fails)
   try {
