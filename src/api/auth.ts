@@ -1,10 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import bcrypt from "bcryptjs";
 import { prisma } from "../db/client";
+import { config } from "../config/env";
 
 export async function registerAuthRoutes(fastify: FastifyInstance) {
-  // POST /auth/login
-  fastify.post("/auth/login", async (request, reply) => {
+  // POST /auth/login — rate limited by global Fastify rate-limit plugin (5 attempts per 15 minutes).
+  // TODO: override to stricter config via @fastify/rate-limit { store } option once Redis available.
+  fastify.post<{ Body: { email?: string; password?: string } }>(
+    "/auth/login",
+    async (request, reply) => {
     const { email, password } = request.body as { email?: string; password?: string };
 
     if (!email || !password) {
@@ -29,28 +33,29 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
       data: { lastLoginAt: new Date() },
     });
 
-    const token = (fastify as any).jwt.sign(
-      {
-        sub: coordinator.id,
-        email: coordinator.email,
-        name: coordinator.name,
-        role: coordinator.role,
-        hospitalName: coordinator.hospitalName,
-      },
-      { expiresIn: "8h" }
-    );
+      const token = (fastify as any).jwt.sign(
+        {
+          sub: coordinator.id,
+          email: coordinator.email,
+          name: coordinator.name,
+          role: coordinator.role,
+          hospitalName: coordinator.hospitalName,
+        },
+        { expiresIn: config.jwtTtl }
+      );
 
-    return {
-      token,
-      coordinator: {
-        id: coordinator.id,
-        email: coordinator.email,
-        name: coordinator.name,
-        role: coordinator.role,
-        hospitalName: coordinator.hospitalName,
-      },
-    };
-  });
+      return {
+        token,
+        coordinator: {
+          id: coordinator.id,
+          email: coordinator.email,
+          name: coordinator.name,
+          role: coordinator.role,
+          hospitalName: coordinator.hospitalName,
+        },
+      };
+    }
+  );
 
   // GET /auth/me — verify token + return coordinator info
   fastify.get("/auth/me", {

@@ -25,6 +25,10 @@ const envSchema = z.object({
     .enum(["require", "disable", "auto"])
     .optional()
     .default("auto"),
+  // JWT token expiration (e.g., "8h", "7d", "24h")
+  JWT_TTL: z.string().optional().default("8h"),
+  // Rate limiting for /auth/login (requests per 15 minutes)
+  LOGIN_RATE_LIMIT: z.coerce.number().int().positive().optional().default(5),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -80,6 +84,8 @@ export const config = {
   allowedOrigins: env.ALLOWED_ORIGINS,
   patientScopeEnforce: env.PATIENT_SCOPE_ENFORCE,
   databaseSsl: env.DATABASE_SSL,
+  jwtTtl: env.JWT_TTL,
+  loginRateLimit: env.LOGIN_RATE_LIMIT,
 } as const;
 
 export type AppConfig = typeof config;

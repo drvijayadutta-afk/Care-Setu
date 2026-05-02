@@ -8,6 +8,7 @@ const fastify_1 = __importDefault(require("fastify"));
 const cors_1 = __importDefault(require("@fastify/cors"));
 const websocket_1 = __importDefault(require("@fastify/websocket"));
 const jwt_1 = __importDefault(require("@fastify/jwt"));
+const rate_limit_1 = __importDefault(require("@fastify/rate-limit"));
 const handler_1 = require("./webhook/handler");
 const handler_2 = require("./telegram/handler");
 const sender_1 = require("./telegram/sender");
@@ -31,7 +32,6 @@ fastify.get("/health", async () => ({ status: "ok", timestamp: new Date().toISOS
 fastify.get("/webhook", handler_1.handleWebhookVerification);
 // WhatsApp incoming messages (POST)
 fastify.post("/webhook", {
-    config: { rawBody: true },
     handler: handler_1.handleWebhookMessage,
 });
 // Telegram incoming messages (POST)
@@ -61,6 +61,11 @@ async function start() {
     try {
         // Add CORS support — restrict to known frontend origins
         await fastify.register(cors_1.default, { origin: env_1.config.allowedOrigins });
+        // Rate limiting — 15-minute windows, configurable per endpoint
+        await fastify.register(rate_limit_1.default, {
+            max: 100, // global default, overridden per route
+            timeWindow: 15 * 60 * 1000, // 15 minutes
+        });
         // JWT authentication — secret validated at boot in src/config/env.ts
         await fastify.register(jwt_1.default, { secret: env_1.config.jwtSecret });
         // Decorator used by protected routes

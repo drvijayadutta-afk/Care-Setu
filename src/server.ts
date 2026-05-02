@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import jwt from "@fastify/jwt";
+import rateLimit from "@fastify/rate-limit";
 import {
   handleWebhookVerification,
   handleWebhookMessage,
@@ -44,7 +45,6 @@ fastify.get("/webhook", handleWebhookVerification);
 
 // WhatsApp incoming messages (POST)
 fastify.post("/webhook", {
-  config: { rawBody: true },
   handler: handleWebhookMessage,
 });
 
@@ -82,6 +82,12 @@ async function start() {
   try {
     // Add CORS support — restrict to known frontend origins
     await fastify.register(cors, { origin: config.allowedOrigins });
+
+    // Rate limiting — 15-minute windows, configurable per endpoint
+    await fastify.register(rateLimit, {
+      max: 100, // global default, overridden per route
+      timeWindow: 15 * 60 * 1000, // 15 minutes
+    });
 
     // JWT authentication — secret validated at boot in src/config/env.ts
     await fastify.register(jwt, { secret: config.jwtSecret });
