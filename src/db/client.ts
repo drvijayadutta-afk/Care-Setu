@@ -7,7 +7,8 @@ function createPrismaClient() {
   const isProduction = process.env.NODE_ENV === "production";
   const adapter = new PrismaPg({
     connectionString: process.env.DATABASE_URL,
-    // Required for Supabase in production (self-signed cert chain)
+    // Accept Supabase's self-signed certificate chain in production
+    // IPv4 is forced via NODE_OPTIONS=--dns-result-order=ipv4first on Render
     ...(isProduction && { ssl: { rejectUnauthorized: false } }),
   });
   return new PrismaClient({
