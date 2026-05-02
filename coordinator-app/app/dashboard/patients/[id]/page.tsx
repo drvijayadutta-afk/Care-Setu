@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, createElement } from 'react';
 import {
   getPatient, getPatientConversations, getPatientCheckins, getPatientAppointments,
   getPatientLabResults, getPatientImaging, getPatientPathology, getPatientVitals,
@@ -128,7 +128,7 @@ export default function PatientDetailPage() {
                     : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
-                {tab.icon} {tab.label}
+                {createElement(tab.iconType)} {tab.label}
               </button>
             ))}
           </div>

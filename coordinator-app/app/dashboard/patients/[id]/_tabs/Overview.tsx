@@ -20,7 +20,7 @@ export function OverviewTab({ patientId, patient, labResults, vitals, careTeam }
   const handleLoadMdtSummary = async () => {
     setMdtLoading(true);
     try {
-      const summary = await getMdtSummary(patientId);
+      const { summary } = await getMdtSummary(patientId);
       setMdtSummary(summary);
     } catch (e) {
       console.error(e);
