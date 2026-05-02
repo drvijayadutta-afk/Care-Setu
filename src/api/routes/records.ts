@@ -1,12 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import type { IRecordRepository } from "../../repositories/types";
-import { generateUploadUrl, generateDownloadUrl, deleteFile } from "../../integrations/supabase-storage";
+import type { AiPort } from "../../ports/ai";
+import type { StoragePort } from "../../ports/storage";
+import { deleteFile } from "../../integrations/supabase-storage";
 import { extractDocument } from "../services/extract-document.service";
 import { prisma } from "../../db/client";
 
 export function registerRecordRoutes(
   fastify: FastifyInstance,
-  recordRepo: IRecordRepository
+  recordRepo: IRecordRepository,
+  aiPort: AiPort,
+  storagePort: StoragePort
 ) {
   const auth = [(fastify as any).authenticate];
   const authScope = [...auth, (fastify as any).requirePatientAccess];
@@ -258,7 +262,7 @@ export function registerRecordRoutes(
 
     const docId = crypto.randomUUID();
     const storagePath = `${id}/${category.toLowerCase()}/${docId}.${fileType}`;
-    const { uploadUrl } = await generateUploadUrl(storagePath, fileType);
+    const { uploadUrl } = await storagePort.generateUploadUrl(storagePath, fileType);
 
     const doc = await recordRepo.documents.create({
       id: docId,
@@ -300,7 +304,7 @@ export function registerRecordRoutes(
       select: { storagePath: true, fileType: true, title: true },
     });
     if (!doc) return reply.status(404).send({ error: "Document not found" });
-    const { downloadUrl } = await generateDownloadUrl(doc.storagePath);
+    const { downloadUrl } = await storagePort.generateDownloadUrl(doc.storagePath);
     return { downloadUrl, title: doc.title, fileType: doc.fileType };
   });
 
@@ -316,7 +320,7 @@ export function registerRecordRoutes(
   fastify.post("/documents/:id/extract", { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
-      const extracted = await extractDocument(id, recordRepo);
+      const extracted = await extractDocument(id, recordRepo, aiPort);
       return { ok: true, extracted };
     } catch (error: any) {
       if (error.message === "Document not found") {

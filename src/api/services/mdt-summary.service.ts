@@ -1,7 +1,7 @@
 import { prisma } from "../../db/client";
-import { generateMdtSummary } from "../../integrations/claude";
+import type { AiPort } from "../../ports/ai";
 
-export async function getMdtSummary(patientId: string) {
+export async function getMdtSummary(patientId: string, aiPort: AiPort) {
   const patient = await prisma.patient.findUnique({
     where: { id: patientId },
     include: {
@@ -20,6 +20,6 @@ export async function getMdtSummary(patientId: string) {
 
   if (!patient) throw new Error("Patient not found");
 
-  const summary = await generateMdtSummary(patient as any);
+  const summary = await aiPort.generateMdtSummary(patient as any);
   return summary;
 }

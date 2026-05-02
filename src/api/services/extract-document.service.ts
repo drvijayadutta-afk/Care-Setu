@@ -1,12 +1,12 @@
-import { extractDocumentData } from "../../integrations/claude";
 import { prisma } from "../../db/client";
 import type { IRecordRepository } from "../../repositories/types";
+import type { AiPort } from "../../ports/ai";
 
-export async function extractDocument(id: string, recordRepo: IRecordRepository) {
+export async function extractDocument(id: string, recordRepo: IRecordRepository, aiPort: AiPort) {
   const doc = await prisma.patientDocument.findUnique({ where: { id } });
   if (!doc) throw new Error("Document not found");
 
-  const extracted = await extractDocumentData(doc.storagePath, doc.category, doc.fileType);
+  const extracted = await aiPort.extractDocument(doc.storagePath, doc.category, doc.fileType);
 
   await prisma.patientDocument.update({
     where: { id },

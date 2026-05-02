@@ -1,12 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import type { IPatientRepository, IConversationRepository, IRecordRepository } from "../../repositories/types";
+import type { AiPort } from "../../ports/ai";
 import { getMdtSummary } from "../services/mdt-summary.service";
 
 export function registerPatientRoutes(
   fastify: FastifyInstance,
   patientRepo: IPatientRepository,
   conversationRepo: IConversationRepository,
-  recordRepo: IRecordRepository
+  recordRepo: IRecordRepository,
+  aiPort: AiPort
 ) {
   const auth = [(fastify as any).authenticate];
   const authScope = [...auth, (fastify as any).requirePatientAccess];
@@ -54,7 +56,7 @@ export function registerPatientRoutes(
   fastify.get("/patients/:id/mdt-summary", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
-      const summary = await getMdtSummary(id);
+      const summary = await getMdtSummary(id, aiPort);
       return { summary };
     } catch (error: any) {
       if (error.message === "Patient not found") {

@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerApiRoutes = registerApiRoutes;
+const claude_ai_impl_1 = require("../ports/implementations/claude-ai.impl");
+const supabase_storage_impl_1 = require("../ports/implementations/supabase-storage.impl");
 const patients_1 = require("./routes/patients");
 const records_1 = require("./routes/records");
 const appointments_1 = require("./routes/appointments");
@@ -11,6 +13,9 @@ async function registerApiRoutes(fastify) {
     const patientRepo = fastify.patientRepo;
     const recordRepo = fastify.recordRepo;
     const conversationRepo = fastify.conversationRepo;
+    // Instantiate ports
+    const aiPort = new claude_ai_impl_1.ClaudeAiImplementation();
+    const storagePort = new supabase_storage_impl_1.SupabaseStorageImplementation();
     // DB diagnostics (public — used by Render health checks)
     fastify.get("/diag/db", async (request, reply) => {
         try {
@@ -26,8 +31,8 @@ async function registerApiRoutes(fastify) {
         }
     });
     // Register modularized routes
-    (0, patients_1.registerPatientRoutes)(fastify, patientRepo, conversationRepo, recordRepo);
-    (0, records_1.registerRecordRoutes)(fastify, recordRepo);
+    (0, patients_1.registerPatientRoutes)(fastify, patientRepo, conversationRepo, recordRepo, aiPort);
+    (0, records_1.registerRecordRoutes)(fastify, recordRepo, aiPort, storagePort);
     (0, appointments_1.registerAppointmentRoutes)(fastify, recordRepo);
     (0, messages_1.registerMessageRoutes)(fastify, patientRepo, conversationRepo);
 }

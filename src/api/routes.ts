@@ -1,5 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import type { IPatientRepository, IRecordRepository, IConversationRepository } from "../repositories/types";
+import type { AiPort } from "../ports/ai";
+import type { StoragePort } from "../ports/storage";
+import { ClaudeAiImplementation } from "../ports/implementations/claude-ai.impl";
+import { SupabaseStorageImplementation } from "../ports/implementations/supabase-storage.impl";
 import { registerPatientRoutes } from "./routes/patients";
 import { registerRecordRoutes } from "./routes/records";
 import { registerAppointmentRoutes } from "./routes/appointments";
@@ -12,6 +16,10 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   const patientRepo = (fastify as any).patientRepo as IPatientRepository;
   const recordRepo = (fastify as any).recordRepo as IRecordRepository;
   const conversationRepo = (fastify as any).conversationRepo as IConversationRepository;
+
+  // Instantiate ports
+  const aiPort: AiPort = new ClaudeAiImplementation();
+  const storagePort: StoragePort = new SupabaseStorageImplementation();
 
   // DB diagnostics (public — used by Render health checks)
   fastify.get("/diag/db", async (request, reply) => {
@@ -28,8 +36,8 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   });
 
   // Register modularized routes
-  registerPatientRoutes(fastify, patientRepo, conversationRepo, recordRepo);
-  registerRecordRoutes(fastify, recordRepo);
+  registerPatientRoutes(fastify, patientRepo, conversationRepo, recordRepo, aiPort);
+  registerRecordRoutes(fastify, recordRepo, aiPort, storagePort);
   registerAppointmentRoutes(fastify, recordRepo);
   registerMessageRoutes(fastify, patientRepo, conversationRepo);
 }
