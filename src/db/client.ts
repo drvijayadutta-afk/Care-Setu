@@ -4,10 +4,15 @@ import { PrismaPg } from "@prisma/adapter-pg";
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 function createPrismaClient() {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  const isProduction = process.env.NODE_ENV === "production";
+  const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL,
+    // Required for Supabase in production (self-signed cert chain)
+    ...(isProduction && { ssl: { rejectUnauthorized: false } }),
+  });
   return new PrismaClient({
     adapter,
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    log: isProduction ? ["error"] : ["error", "warn"],
   });
 }
 
