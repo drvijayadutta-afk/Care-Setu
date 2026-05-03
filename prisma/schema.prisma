@@ -103,6 +103,27 @@ model Doctor {
   careTeamMembers CareTeamMember[]
   referralsFrom   Referral[]  @relation("ReferralFrom")
   referralsTo     Referral[]  @relation("ReferralTo")
+  doctorUser      DoctorUser?
+}
+
+// Authentication identity for a Doctor. One-to-one with Doctor.
+// Created lazily on first magic-link request — Doctor profiles can exist
+// without a DoctorUser (passive WhatsApp recipient). Once a doctor signs in,
+// the DoctorUser row tracks magic-link tokens (hashed) and login history.
+model DoctorUser {
+  id                  String    @id @default(uuid())
+  doctorId            String    @unique
+  doctor              Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  email               String    @unique
+  // Magic-link tokens are SHA-256 hashed before storage. Single-use, 15-min TTL.
+  magicLinkTokenHash  String?
+  magicLinkExpiresAt  DateTime?
+  magicLinkUsedAt     DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([magicLinkTokenHash])
 }
 
 model Checkin {

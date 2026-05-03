@@ -22,6 +22,7 @@ import { doctorSignalQueue, checkinQueue } from "./jobs/queue";
 import { pollAisensyMessages } from "./integrations/aisensy-poller";
 import { registerApiRoutes } from "./api/routes";
 import { registerAuthRoutes } from "./api/auth";
+import { registerDoctorAuthRoutes } from "./api/routes/doctor-auth";
 import { registerWebSocketRoutes } from "./websocket/routes";
 import { requirePatientAccess } from "./api/middleware/patient-scope";
 import { PatientRepository } from "./repositories/patient.repo";
@@ -147,6 +148,7 @@ async function start() {
 
     // Auth routes (public — no JWT required)
     await registerAuthRoutes(fastify);
+    await registerDoctorAuthRoutes(fastify);
 
     // Register API routes (protected inside via preHandler)
     await registerApiRoutes(fastify);
