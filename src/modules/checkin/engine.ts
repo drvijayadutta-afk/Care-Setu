@@ -3,6 +3,7 @@ import { messagingRouter } from "../../messaging/router";
 import { askClaudeJSON } from "../../integrations/claude";
 import { CHECKIN_EXTRACTOR_PROMPT } from "../../ai/prompts";
 import { evaluateThresholds } from "../symptoms/thresholds";
+import { wsManager } from "../../websocket/manager";
 import type { Patient } from "@prisma/client";
 
 interface CheckinExtraction {
@@ -133,6 +134,16 @@ export async function handleCheckinResponse(
       notes,
       cycleDay,
     },
+  });
+
+  // Broadcast to global dashboard feed
+  wsManager.broadcastGlobal({
+    type: "activity",
+    patientId: patient.id,
+    patientName: patient.name ?? "Patient",
+    eventKind: "checkin",
+    summary: `Score ${score}/5${symptoms.length ? ` — ${symptoms.slice(0, 3).join(", ")}` : ""}`,
+    timestamp: new Date().toISOString(),
   });
 
   // Evaluate thresholds — may create alerts

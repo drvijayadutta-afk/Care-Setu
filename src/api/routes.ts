@@ -9,6 +9,10 @@ import { registerRecordRoutes } from "./routes/records";
 import { registerAppointmentRoutes } from "./routes/appointments";
 import { registerMessageRoutes } from "./routes/messages";
 import { registerTumorBoardRoutes } from "./routes/tumor-board";
+import { registerActivityFeedRoutes } from "./routes/activity-feed";
+import { registerDoctorRoutes } from "./routes/doctors";
+import { registerReferralRoutes } from "./routes/referrals";
+import { registerAuditRoutes } from "./routes/audit";
 
 export async function registerApiRoutes(fastify: FastifyInstance) {
   const auth = [(fastify as any).authenticate];
@@ -42,4 +46,8 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   registerAppointmentRoutes(fastify, recordRepo);
   registerMessageRoutes(fastify, patientRepo, conversationRepo);
   registerTumorBoardRoutes(fastify, aiPort);
+  registerActivityFeedRoutes(fastify);
+  registerDoctorRoutes(fastify);
+  registerReferralRoutes(fastify);
+  registerAuditRoutes(fastify);
 }

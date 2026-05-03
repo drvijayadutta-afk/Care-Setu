@@ -508,4 +508,182 @@ export const createPatient = async (body: {
   return data as Patient;
 };
 
+// ─── Outbound Message Log ─────────────────────────────────────────────────────
+
+export interface OutboundMessage {
+  id: string;
+  patientId: string;
+  channel: string;
+  recipientRef: string;
+  messageType: string;
+  content: string;
+  externalId: string | null;
+  status: string;
+  jobId: string | null;
+  sentAt: string;
+  failureReason: string | null;
+}
+
+export const getPatientOutboundMessages = async (
+  patientId: string,
+  opts?: { limit?: number; cursor?: string; messageType?: string }
+) => {
+  const params = new URLSearchParams();
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  if (opts?.cursor) params.set('cursor', opts.cursor);
+  if (opts?.messageType) params.set('messageType', opts.messageType);
+  const { data } = await api.get(`/patients/${patientId}/outbound-messages?${params}`);
+  return data as OutboundMessage[];
+};
+
+// ─── Doctors ──────────────────────────────────────────────────────────────────
+
+export interface Doctor {
+  id: string;
+  whatsappNumber: string;
+  name: string;
+  hospitalName: string;
+  specialization: string;
+  registrationNumber: string | null;
+  qualifications: string[];
+  department: string | null;
+  experienceYears: number | null;
+  secondaryPhone: string | null;
+  email: string | null;
+  availabilityNotes: string | null;
+  photoUrl: string | null;
+  bio: string | null;
+  isOptedIn: boolean;
+  createdAt: string;
+}
+
+export const getDoctors = async (hospitalName?: string) => {
+  const params = hospitalName ? `?hospitalName=${encodeURIComponent(hospitalName)}` : '';
+  const { data } = await api.get(`/doctors${params}`);
+  return data as (Doctor & { _count: { patients: number; careTeamMembers: number } })[];
+};
+
+export const getDoctor = async (doctorId: string) => {
+  const { data } = await api.get(`/doctors/${doctorId}`);
+  return data as Doctor;
+};
+
+export const createDoctor = async (body: Partial<Doctor>) => {
+  const { data } = await api.post('/doctors', body);
+  return data as Doctor;
+};
+
+export const updateDoctor = async (doctorId: string, body: Partial<Doctor>) => {
+  const { data } = await api.patch(`/doctors/${doctorId}`, body);
+  return data as Doctor;
+};
+
+export const linkCareTeamMemberToDoctor = async (memberId: string, doctorId: string) => {
+  const { data } = await api.patch(`/care-team/${memberId}/link-doctor`, { doctorId });
+  return data;
+};
+
+// ─── Referrals ────────────────────────────────────────────────────────────────
+
+export interface Referral {
+  id: string;
+  patientId: string;
+  fromDoctorId: string | null;
+  fromCoordinatorId: string | null;
+  toDoctorId: string;
+  reason: string;
+  urgency: string;
+  clinicalContext: string | null;
+  status: string;
+  acceptedAt: string | null;
+  seenAt: string | null;
+  completedAt: string | null;
+  declinedAt: string | null;
+  declineReason: string | null;
+  notificationSent: boolean;
+  createdAt: string;
+  updatedAt: string;
+  toDoctor?: Doctor;
+  fromCoordinator?: { name: string };
+  patient?: { name: string };
+}
+
+export const createReferral = async (
+  patientId: string,
+  body: { toDoctorId: string; reason: string; urgency: string; clinicalContext?: string }
+) => {
+  const { data } = await api.post(`/patients/${patientId}/referrals`, body);
+  return data as Referral;
+};
+
+export const getPatientReferrals = async (patientId: string) => {
+  const { data } = await api.get(`/patients/${patientId}/referrals`);
+  return data as Referral[];
+};
+
+export const getAllReferrals = async (filters?: {
+  status?: string; urgency?: string; toDoctorId?: string;
+}) => {
+  const params = new URLSearchParams(filters as any).toString();
+  const { data } = await api.get(`/referrals${params ? `?${params}` : ''}`);
+  return data as Referral[];
+};
+
+export const updateReferralStatus = async (
+  referralId: string,
+  status: string,
+  declineReason?: string
+) => {
+  const { data } = await api.patch(`/referrals/${referralId}/status`, { status, declineReason });
+  return data as Referral;
+};
+
+// ─── Audit Log (admin only) ───────────────────────────────────────────────────
+
+export const getAuditLog = async (filters?: {
+  coordinatorId?: string; patientId?: string; outOfScopeOnly?: boolean;
+  from?: string; to?: string; limit?: number; cursor?: string;
+}) => {
+  const params = new URLSearchParams();
+  if (filters?.coordinatorId) params.set('coordinatorId', filters.coordinatorId);
+  if (filters?.patientId) params.set('patientId', filters.patientId);
+  if (filters?.outOfScopeOnly) params.set('outOfScopeOnly', 'true');
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  if (filters?.limit) params.set('limit', String(filters.limit));
+  if (filters?.cursor) params.set('cursor', filters.cursor);
+  const { data } = await api.get(`/admin/audit-log?${params}`);
+  return data as any[];
+};
+
+export const getAuditSummary = async () => {
+  const { data } = await api.get('/admin/audit-log/summary');
+  return data as {
+    totalAccesses30d: number;
+    outOfScopeCount: number;
+    crossHospitalCount: number;
+    flaggedCoordinators: { coordinatorId: string; name: string; count: number }[];
+    topViewedPatients: { patientId: string; name: string; count: number }[];
+  };
+};
+
+// ─── Activity Feed ────────────────────────────────────────────────────────────
+
+export interface ActivityItem {
+  id: string;
+  type: string;
+  patientId: string;
+  patientName: string;
+  summary: string;
+  severity?: string;
+  createdAt: string;
+}
+
+export const getActivityFeed = async (limit = 50, cursor?: string) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+  const { data } = await api.get(`/activity-feed?${params}`);
+  return data as ActivityItem[];
+};
+
 export default api;

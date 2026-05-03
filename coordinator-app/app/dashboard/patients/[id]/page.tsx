@@ -5,8 +5,10 @@ import {
   getPatient, getPatientConversations, getPatientCheckins, getPatientAppointments,
   getPatientLabResults, getPatientImaging, getPatientPathology, getPatientVitals,
   getPatientClinicalNotes, getPatientDocuments, getCareTeam, getTumorBoardMeetings,
+  getPatientOutboundMessages, getPatientReferrals,
   Patient, Conversation, Checkin, Appointment, LabResult, ImagingReport,
   PathologyReport, VitalSign, ClinicalNote, PatientDocument, CareTeamMember, TumorBoardMeeting,
+  OutboundMessage, Referral,
 } from '@/lib/api';
 import { useWebSocket } from '@/lib/useWebSocket';
 import { useParams } from 'next/navigation';
@@ -16,7 +18,8 @@ import { pushNotification } from '@/components/NotificationsBell';
 import { TABS, RECORD_REGISTRY, RecordTabId } from '@/lib/recordRegistry';
 import {
   OverviewTab, ConversationsTab, CheckinsTab, AppointmentsTab, LabsTab,
-  ImagingTab, PathologyTab, VitalsTab, NotesTab, DocumentsTab, CareTeamTab, TumorBoardTab
+  ImagingTab, PathologyTab, VitalsTab, NotesTab, DocumentsTab, CareTeamTab, TumorBoardTab,
+  OutboundMessagesTab, ReferralsTab,
 } from './_tabs';
 
 const TAB_COMPONENTS: Record<RecordTabId, React.ComponentType<any>> = {
@@ -32,6 +35,8 @@ const TAB_COMPONENTS: Record<RecordTabId, React.ComponentType<any>> = {
   documents: DocumentsTab,
   'care-team': CareTeamTab,
   'tumor-board': TumorBoardTab,
+  'outbound-messages': OutboundMessagesTab,
+  referrals: ReferralsTab,
 };
 
 // Which tabs are critical (loaded immediately) vs deferred (loaded on first click)
@@ -53,6 +58,8 @@ export default function PatientDetailPage() {
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
   const [careTeam, setCareTeam] = useState<CareTeamMember[]>([]);
   const [tumorBoardMeetings, setTumorBoardMeetings] = useState<TumorBoardMeeting[]>([]);
+  const [outboundMessages, setOutboundMessages] = useState<OutboundMessage[]>([]);
+  const [referrals, setReferrals] = useState<Referral[]>([]);
 
   // Two-phase loading: critical = patient header + overview data; secondary = rest
   const [loadingCritical, setLoadingCritical] = useState(true);
@@ -106,6 +113,14 @@ export default function PatientDetailPage() {
         setTumorBoardMeetings(tb);
         if (!loadedTabs.has('imaging')) setImaging(img);
         if (!loadedTabs.has('pathology')) setPathology(path);
+      }
+      else if (tab === 'outbound-messages') {
+        const msgs = await getPatientOutboundMessages(patientId);
+        setOutboundMessages(msgs);
+      }
+      else if (tab === 'referrals') {
+        const refs = await getPatientReferrals(patientId);
+        setReferrals(refs);
       }
     } catch (e) { console.error(e); }
   }, [patientId, loadedTabs, imaging, pathology]);
@@ -273,6 +288,16 @@ export default function PatientDetailPage() {
                       pathology={pathology}
                       onMeetingsUpdate={setTumorBoardMeetings}
                     />
+              )}
+              {activeTab === 'outbound-messages' && (
+                !loadedTabs.has('outbound-messages')
+                  ? <div className="text-center text-gray-500 py-12">Loading…</div>
+                  : <OutboundMessagesTab patientId={patientId} messages={outboundMessages} />
+              )}
+              {activeTab === 'referrals' && (
+                !loadedTabs.has('referrals')
+                  ? <div className="text-center text-gray-500 py-12">Loading…</div>
+                  : <ReferralsTab patientId={patientId} referrals={referrals} />
               )}
             </div>
           </div>

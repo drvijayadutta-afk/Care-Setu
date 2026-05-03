@@ -58,8 +58,10 @@ model Patient {
   clinicalNotes     ClinicalNote[]
   documents         PatientDocument[]
   careTeamMembers   CareTeamMember[]
-  extractedDrafts   ExtractedRecordDraft[]
+  extractedDrafts    ExtractedRecordDraft[]
   tumorBoardMeetings TumorBoardMeeting[]
+  outboundMessages   OutboundMessage[]
+  referrals          Referral[]
 }
 
 model Caregiver {
@@ -76,17 +78,31 @@ model Caregiver {
 }
 
 model Doctor {
-  id             String    @id @default(uuid())
-  whatsappNumber String    @unique
-  name           String
-  hospitalName   String
-  specialization String    @default("Oncology")
-  practoId       String?
-  apolloId       String?
-  isOptedIn      Boolean   @default(false)
-  createdAt      DateTime  @default(now())
+  id                 String    @id @default(uuid())
+  whatsappNumber     String    @unique
+  name               String
+  hospitalName       String
+  specialization     String    @default("Oncology")
+  practoId           String?
+  apolloId           String?
+  isOptedIn          Boolean   @default(false)
+  // Extended profile fields
+  registrationNumber String?   // MCI/NMC registration number
+  qualifications     String[]  // ["MBBS", "MD (Medical Oncology)", "DM"]
+  department         String?
+  experienceYears    Int?
+  secondaryPhone     String?
+  email              String?
+  availabilityNotes  String?   // free text: "Mon-Wed 10am-1pm OPD"
+  photoUrl           String?
+  bio                String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  patients Patient[]
+  patients        Patient[]
+  careTeamMembers CareTeamMember[]
+  referralsFrom   Referral[]  @relation("ReferralFrom")
+  referralsTo     Referral[]  @relation("ReferralTo")
 }
 
 model Checkin {
@@ -221,7 +237,8 @@ model Coordinator {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
 
-  patients     Patient[]
+  patients       Patient[]
+  referralsMade  Referral[]
 }
 
 model CoordinatorTask {
@@ -380,9 +397,11 @@ model CareTeamMember {
   department   String?
   isPrimary    Boolean   @default(false)
   isActive     Boolean   @default(true)
+  doctorId     String?   // optional link to Doctor profile
   createdAt    DateTime  @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id])
+  doctor  Doctor? @relation(fields: [doctorId], references: [id])
 }
 
 model ExtractedRecordDraft {
@@ -450,4 +469,79 @@ model AlertDelivery {
   createdAt    DateTime  @default(now())
 
   alert Alert @relation(fields: [alertId], references: [id])
+}
+
+// ─── Outbound Message Log ────────────────────────────────────────────────────
+
+model OutboundMessage {
+  id            String   @id @default(uuid())
+  patientId     String
+  channel       String   // whatsapp | telegram
+  recipientRef  String   // phone or chatId
+  messageType   String   // checkin_prompt | appointment_reminder | appointment_brief |
+                         // medication_reminder | caregiver_brief | doctor_signal |
+                         // coordinator_manual | alert_followup | referral_notification
+  content       String
+  externalId    String?  // message ID returned by WhatsApp/Telegram API
+  status        String   @default("sent") // sent | failed
+  jobId         String?  // BullMQ job ID for traceability
+  sentAt        DateTime @default(now())
+  failureReason String?
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([patientId, sentAt])
+  @@index([sentAt])
+}
+
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id              String   @id @default(uuid())
+  coordinatorId   String
+  patientId       String
+  action          String   // patient_view | patient_list | record_view | document_download
+  resourceType    String?  // lab_result | imaging | document | checkin | conversation
+  resourceId      String?
+  isOutOfScope    Boolean  @default(false)  // coordinator != assignedCoordinatorId
+  isCrossHospital Boolean  @default(false)
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+
+  @@index([coordinatorId, createdAt])
+  @@index([patientId, createdAt])
+  @@index([isOutOfScope, createdAt])
+}
+
+// ─── Referral ────────────────────────────────────────────────────────────────
+
+model Referral {
+  id                String    @id @default(uuid())
+  patientId         String
+  fromDoctorId      String?
+  fromCoordinatorId String?
+  toDoctorId        String
+  reason            String
+  urgency           String    @default("routine") // routine | urgent | emergency
+  clinicalContext   String?
+  status            String    @default("pending")
+                              // pending | accepted | seen | completed | declined
+  acceptedAt        DateTime?
+  seenAt            DateTime?
+  completedAt       DateTime?
+  declinedAt        DateTime?
+  declineReason     String?
+  notificationSent  Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  patient         Patient      @relation(fields: [patientId], references: [id])
+  fromDoctor      Doctor?      @relation("ReferralFrom", fields: [fromDoctorId], references: [id])
+  fromCoordinator Coordinator? @relation(fields: [fromCoordinatorId], references: [id])
+  toDoctor        Doctor       @relation("ReferralTo", fields: [toDoctorId], references: [id])
+
+  @@index([patientId])
+  @@index([toDoctorId, status])
+  @@index([status, createdAt])
 }

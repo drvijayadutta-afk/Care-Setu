@@ -9,8 +9,19 @@ export type WSEvent =
   | { type: 'document_uploaded'; patientId: string; documentId: string; category: string; title: string }
   | { type: 'tumor-board'; patientId: string; meetingId: string; action: 'created' | 'updated' | 'signed-off'; title: string };
 
+export type ActivityKind = 'checkin' | 'alert' | 'document_uploaded' | 'outbound_message' | 'referral' | 'appointment';
+
+export type GlobalWSEvent =
+  | { type: 'activity'; patientId: string; patientName: string; eventKind: ActivityKind; summary: string; severity?: string; timestamp: string }
+  | { type: 'alert_badge'; patientId: string; severity: string; alertType: string; timestamp: string }
+  | { type: 'global_ping' };
+
+// Throttle tracking — suppress duplicate global events within 5s per patientId+eventKind
+const throttleMap = new Map<string, number>();
+
 class WebSocketManager {
   private connections: Map<string, Set<WebSocket>> = new Map();
+  private globalConnections: Set<WebSocket> = new Set();
 
   subscribe(patientId: string, ws: WebSocket) {
     if (!this.connections.has(patientId)) {
@@ -62,6 +73,33 @@ class WebSocketManager {
 
     // Clean up dead connections
     deadConnections.forEach(ws => this.unsubscribe(patientId, ws));
+  }
+
+  subscribeGlobal(ws: WebSocket) {
+    this.globalConnections.add(ws);
+    ws.on('close', () => this.globalConnections.delete(ws));
+    ws.on('error', () => this.globalConnections.delete(ws));
+  }
+
+  broadcastGlobal(event: GlobalWSEvent) {
+    // Throttle activity events to once per 5s per patientId+eventKind
+    if (event.type === 'activity') {
+      const key = `${event.patientId}:${event.eventKind}`;
+      const last = throttleMap.get(key) ?? 0;
+      if (Date.now() - last < 5000) return;
+      throttleMap.set(key, Date.now());
+    }
+
+    const message = JSON.stringify(event);
+    const dead: WebSocket[] = [];
+    this.globalConnections.forEach(ws => {
+      if (ws.readyState === 1) {
+        ws.send(message, err => { if (err) dead.push(ws); });
+      } else {
+        dead.push(ws);
+      }
+    });
+    dead.forEach(ws => this.globalConnections.delete(ws));
   }
 
   broadcastToAll(event: WSEvent & { type: 'patient_status' }) {

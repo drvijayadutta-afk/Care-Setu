@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useCoordinatorStore } from '@/lib/store';
 import Link from 'next/link';
-import { FiLogOut, FiUsers, FiHome, FiSettings } from 'react-icons/fi';
+import { FiLogOut, FiUsers, FiHome, FiSettings, FiUserCheck, FiGitBranch, FiShield } from 'react-icons/fi';
 import { ToastProvider } from '@/lib/toast';
 import { NotificationsBell } from '@/components/NotificationsBell';
 
@@ -74,14 +74,37 @@ export default function DashboardLayout({
             <FiUsers className="text-xl" />
             Patients
           </Link>
+          <Link
+            href="/dashboard/doctors"
+            className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
+          >
+            <FiUserCheck className="text-xl" />
+            Doctors
+          </Link>
+          <Link
+            href="/dashboard/referrals"
+            className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
+          >
+            <FiGitBranch className="text-xl" />
+            Referrals
+          </Link>
           {isAdmin && (
-            <Link
-              href="/dashboard/admin"
-              className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
-            >
-              <FiSettings className="text-xl" />
-              Admin
-            </Link>
+            <>
+              <Link
+                href="/dashboard/admin"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
+              >
+                <FiSettings className="text-xl" />
+                Admin
+              </Link>
+              <Link
+                href="/dashboard/admin/compliance"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
+              >
+                <FiShield className="text-xl" />
+                Compliance
+              </Link>
+            </>
           )}
         </nav>
 
