@@ -128,13 +128,18 @@ export function registerTumorBoardRoutes(fastify: FastifyInstance, aiPort: AiPor
     const meeting = await prisma.tumorBoardMeeting.findUnique({ where: { id: mid } });
     if (!meeting) return reply.status(404).send({ error: "Meeting not found" });
 
-    const briefText = await getMdtSummary(meeting.patientId, aiPort);
-
-    const updated = await prisma.tumorBoardMeeting.update({
-      where: { id: mid },
-      data: { briefText },
-    });
-
-    return { briefText: updated.briefText };
+    try {
+      const briefText = await getMdtSummary(meeting.patientId, aiPort);
+      const updated = await prisma.tumorBoardMeeting.update({
+        where: { id: mid },
+        data: { briefText },
+      });
+      return { briefText: updated.briefText };
+    } catch (error: any) {
+      if (error.message?.startsWith("AI service error")) {
+        return reply.status(503).send({ error: error.message });
+      }
+      throw error;
+    }
   });
 }

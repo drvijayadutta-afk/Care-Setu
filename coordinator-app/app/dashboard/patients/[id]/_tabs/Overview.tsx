@@ -23,9 +23,10 @@ export function OverviewTab({ patientId, patient, labResults, vitals, careTeam }
     try {
       const { summary } = await getMdtSummary(patientId);
       setMdtSummary(summary);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast({ type: 'error', message: 'MDT summary generation failed — check AI service and retry' });
+      const msg = e?.response?.data?.error || 'MDT summary generation failed — check AI service and retry';
+      toast({ type: 'error', message: msg });
     } finally {
       setMdtLoading(false);
     }

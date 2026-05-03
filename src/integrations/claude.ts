@@ -1,8 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { downloadFileBytes } from "./supabase-storage";
 
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.warn("⚠️ ANTHROPIC_API_KEY not set — MDT summaries and AI extractions will fail");
+}
+
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
+  timeout: 30_000, // 30s hard cap so requests never hang indefinitely
 });
 
 const MODEL = "claude-sonnet-4-6";
@@ -160,5 +165,5 @@ Write a structured 1-page clinical summary suitable for a tumor board meeting.
 Use clinical language. Sections: Clinical Summary, Treatment Status, Recent Symptoms & Toxicity, Key Lab/Imaging Findings, Active Issues & Alerts, Suggested Discussion Points.
 Be concise and factual. Do not add anything not present in the data provided.`;
 
-  return askClaude(systemPrompt, context, 1024);
+  return askClaude(systemPrompt, context, 2500);
 }

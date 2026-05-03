@@ -81,8 +81,9 @@ export function TumorBoardTab({
       const updated = meetings.map(m => m.id === selectedMeeting.id ? { ...m, briefText } : m);
       onMeetingsUpdate(updated);
       toast({ type: 'success', message: 'AI brief generated' });
-    } catch {
-      toast({ type: 'error', message: 'Failed to generate brief' });
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || 'Failed to generate brief';
+      toast({ type: 'error', message: msg });
     } finally {
       setBriefLoading(false);
     }

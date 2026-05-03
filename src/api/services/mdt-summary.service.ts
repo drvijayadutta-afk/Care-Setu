@@ -24,6 +24,11 @@ export async function getMdtSummary(patientId: string, aiPort: AiPort) {
 
   if (!patient) throw new Error("Patient not found");
 
-  const summary = await aiPort.generateMdtSummary(patient as any);
-  return summary;
+  try {
+    const summary = await aiPort.generateMdtSummary(patient as any);
+    return summary;
+  } catch (err: any) {
+    console.error("[mdt-summary] AI call failed:", err?.message ?? err);
+    throw new Error(`AI service error: ${err?.message ?? "unknown"}`);
+  }
 }

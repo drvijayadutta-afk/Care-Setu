@@ -119,6 +119,9 @@ export function registerPatientRoutes(
       if (error.message === "Patient not found") {
         return reply.status(404).send({ error: "Patient not found" });
       }
+      if (error.message?.startsWith("AI service error")) {
+        return reply.status(503).send({ error: error.message });
+      }
       throw error;
     }
   });
