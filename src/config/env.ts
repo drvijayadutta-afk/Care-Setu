@@ -12,7 +12,12 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) =>
-      v ? v.split(",").map((s) => s.trim()).filter(Boolean) : ["http://localhost:3001", "http://localhost:3000"]
+      v ? v.split(",").map((s) => s.trim()).filter(Boolean) : [
+        "http://localhost:3001",
+        "http://localhost:3000",
+        "https://coordinator-app-self.vercel.app",
+        "https://care-setu-lac.vercel.app",
+      ]
     ),
   // Set to "true" to enforce patient-scope 403s; default is log-only mode during rollout
   PATIENT_SCOPE_ENFORCE: z
