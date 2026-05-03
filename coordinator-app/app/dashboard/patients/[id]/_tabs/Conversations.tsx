@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { FiSend } from 'react-icons/fi';
+import { FiSend, FiMessageCircle } from 'react-icons/fi';
 import { sendMessage, getPatientConversations, Conversation } from '@/lib/api';
 import { toast } from '@/lib/toast';
 
@@ -49,10 +49,18 @@ export function ConversationsTab({ patientId, conversations, onConversationsUpda
 
   return (
     <div className="flex flex-col h-[600px]">
+      {/* WhatsApp context banner */}
+      <div className="mb-3 flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-800">
+        <FiMessageCircle size={13} className="text-green-600 flex-shrink-0" />
+        <span>
+          Messages are sent and received via <strong>WhatsApp</strong> on the patient's phone.
+          Left-aligned (grey) messages are from the patient. Right-aligned (blue) are sent by you.
+        </span>
+      </div>
       {/* Message history — scrollable */}
       <div className="flex-1 overflow-y-auto space-y-2 pr-1 pb-2">
         {sorted.length === 0 ? (
-          <p className="text-center text-gray-400 mt-16">No messages yet. Send the first message below.</p>
+          <p className="text-center text-gray-400 mt-16">No messages yet. Type below and press Send to message the patient on WhatsApp.</p>
         ) : (
           sorted.map(c => {
             const isPatient = c.role === 'patient';
@@ -84,7 +92,7 @@ export function ConversationsTab({ patientId, conversations, onConversationsUpda
           value={messageInput}
           onChange={e => setMessageInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message… (Enter to send)"
+          placeholder="Type a WhatsApp message to the patient… (Enter to send)"
           disabled={sending}
           className="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
         />
