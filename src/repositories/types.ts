@@ -16,7 +16,7 @@ import type {
 // Patient repository
 export interface IPatientRepository {
   findUnique(id: string): Promise<Patient | null>;
-  findMany(opts?: { take?: number; orderBy?: { [key: string]: "asc" | "desc" } }): Promise<Patient[]>;
+  findMany(opts?: { coordinatorId?: string; take?: number; orderBy?: { [key: string]: "asc" | "desc" } }): Promise<Patient[]>;
   findByWhatsApp(phoneNumber: string): Promise<Patient | null>;
   findByTelegram(chatId: string): Promise<Patient | null>;
   create(data: any): Promise<Patient>;
@@ -36,7 +36,7 @@ export interface ICoordinatorRepository {
 export interface IConversationRepository {
   findMany(
     patientId: string,
-    opts?: { take?: number; orderBy?: { [key: string]: "asc" | "desc" } }
+    opts?: { take?: number; cursor?: string }
   ): Promise<Conversation[]>;
   create(data: any): Promise<Conversation>;
 }

@@ -17,6 +17,11 @@ export async function executeSideEffects(
   patientId: string,
   identifier: { whatsappNumber: string } | { telegramChatId: string } | { patientId: string }
 ): Promise<void> {
+  // Collect deferred effects that must happen AFTER the DB transaction commits.
+  // This prevents phantom jobs when the transaction rolls back, and prevents
+  // partial onboarding when Redis is unavailable.
+  const deferredJobs: Array<() => Promise<void>> = [];
+
   await prisma.$transaction(async (tx) => {
     for (const effect of sideEffects) {
       switch (effect.type) {
@@ -62,18 +67,30 @@ export async function executeSideEffects(
         }
 
         case "schedule_checkin": {
-          const checkinQueue = await getCheckinQueue();
-          const tomorrow8am = new Date();
-          tomorrow8am.setDate(tomorrow8am.getDate() + 1);
-          tomorrow8am.setHours(8, 0, 0, 0);
-          await checkinQueue.add(
-            "morning-checkin",
-            { patientId, cycleDay: 1, type: "morning" },
-            { delay: tomorrow8am.getTime() - Date.now() }
-          );
+          // Capture effect data now; enqueue after the transaction succeeds.
+          const capturedPatientId = patientId;
+          deferredJobs.push(async () => {
+            const checkinQueue = await getCheckinQueue();
+            const tomorrow8am = new Date();
+            tomorrow8am.setDate(tomorrow8am.getDate() + 1);
+            tomorrow8am.setHours(8, 0, 0, 0);
+            await checkinQueue.add(
+              "morning-checkin",
+              { patientId: capturedPatientId, cycleDay: 1, type: "morning" },
+              { delay: tomorrow8am.getTime() - Date.now(), attempts: 3, backoff: { type: "exponential", delay: 5000 } }
+            );
+          });
           break;
         }
       }
     }
   });
+
+  // Transaction committed — now run deferred jobs. Errors here do not roll back
+  // the DB state, but they are logged and can be retried manually if needed.
+  for (const run of deferredJobs) {
+    await run().catch((err) =>
+      console.error("[onboarding] deferred job enqueue failed:", err)
+    );
+  }
 }

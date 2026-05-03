@@ -2,13 +2,28 @@ import type { FastifyInstance } from 'fastify';
 import { wsManager } from './manager';
 
 export async function registerWebSocketRoutes(fastify: FastifyInstance) {
-  // WebSocket endpoint for real-time updates
+  // WebSocket endpoint for real-time updates.
+  // Auth: coordinator must pass their JWT as ?token=<jwt> query param.
   fastify.get('/ws/:patientId', { websocket: true }, async (connection, req) => {
     const { patientId } = req.params as { patientId: string };
+    const query = req.query as Record<string, string>;
+    const token = query.token;
 
-    // Validate patientId (in production, verify auth token and patient access)
     if (!patientId) {
       connection.close(1008, 'Invalid patient ID');
+      return;
+    }
+
+    // Verify JWT — reuse the Fastify JWT instance registered in server.ts
+    if (!token) {
+      connection.close(1008, 'Missing auth token');
+      return;
+    }
+
+    try {
+      await (fastify as any).jwt.verify(token);
+    } catch {
+      connection.close(1008, 'Invalid or expired token');
       return;
     }
 

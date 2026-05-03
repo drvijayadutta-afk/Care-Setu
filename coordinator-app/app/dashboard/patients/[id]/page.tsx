@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, createElement } from 'react';
+import { useEffect, useState, createElement, useCallback } from 'react';
 import {
   getPatient, getPatientConversations, getPatientCheckins, getPatientAppointments,
   getPatientLabResults, getPatientImaging, getPatientPathology, getPatientVitals,
@@ -32,6 +32,9 @@ const TAB_COMPONENTS: Record<RecordTabId, React.ComponentType<any>> = {
   'care-team': CareTeamTab,
 };
 
+// Which tabs are critical (loaded immediately) vs deferred (loaded on first click)
+const CRITICAL_TABS = new Set<RecordTabId>(['overview', 'conversations', 'checkins', 'appointments']);
+
 export default function PatientDetailPage() {
   const params = useParams();
   const patientId = params.id as string;
@@ -48,33 +51,55 @@ export default function PatientDetailPage() {
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
   const [careTeam, setCareTeam] = useState<CareTeamMember[]>([]);
 
-  const [loading, setLoading] = useState(true);
+  // Two-phase loading: critical = patient header + overview data; secondary = rest
+  const [loadingCritical, setLoadingCritical] = useState(true);
+  const [loadedTabs, setLoadedTabs] = useState<Set<RecordTabId>>(new Set());
   const [activeTab, setActiveTab] = useState<RecordTabId>('overview');
 
+  // Load critical data on mount
   useEffect(() => {
+    if (!patientId) return;
     const load = async () => {
       try {
-        const [p, conv, chk, apt, labs, img, path, vit, nts, docs, team] = await Promise.all([
+        const [p, conv, chk, apt, labs, vit, team] = await Promise.all([
           getPatient(patientId),
           getPatientConversations(patientId),
           getPatientCheckins(patientId),
           getPatientAppointments(patientId),
           getPatientLabResults(patientId),
-          getPatientImaging(patientId),
-          getPatientPathology(patientId),
           getPatientVitals(patientId),
-          getPatientClinicalNotes(patientId),
-          getPatientDocuments(patientId),
           getCareTeam(patientId),
         ]);
-        setPatient(p); setConversations(conv); setCheckins(chk); setAppointments(apt);
-        setLabResults(labs); setImaging(img); setPathology(path); setVitals(vit);
-        setNotes(nts); setDocuments(docs); setCareTeam(team);
+        setPatient(p);
+        setConversations(conv);
+        setCheckins(chk);
+        setAppointments(apt);
+        setLabResults(labs);
+        setVitals(vit);
+        setCareTeam(team);
+        setLoadedTabs(new Set(['overview', 'conversations', 'checkins', 'appointments', 'labs', 'vitals', 'care-team'] as RecordTabId[]));
       } catch (e) { console.error(e); }
-      finally { setLoading(false); }
+      finally { setLoadingCritical(false); }
     };
-    if (patientId) load();
+    load();
   }, [patientId]);
+
+  // Load deferred tab data on first click
+  const loadTabData = useCallback(async (tab: RecordTabId) => {
+    if (loadedTabs.has(tab)) return;
+    setLoadedTabs(prev => new Set([...prev, tab]));
+    try {
+      if (tab === 'imaging') { const d = await getPatientImaging(patientId); setImaging(d); }
+      else if (tab === 'pathology') { const d = await getPatientPathology(patientId); setPathology(d); }
+      else if (tab === 'notes') { const d = await getPatientClinicalNotes(patientId); setNotes(d); }
+      else if (tab === 'documents') { const d = await getPatientDocuments(patientId); setDocuments(d); }
+    } catch (e) { console.error(e); }
+  }, [patientId, loadedTabs]);
+
+  const handleTabChange = (tab: RecordTabId) => {
+    setActiveTab(tab);
+    loadTabData(tab);
+  };
 
   const { isConnected: wsConnected } = useWebSocket(patientId, async (event: any) => {
     if (event.type === 'message' && event.patientId === patientId)
@@ -86,7 +111,6 @@ export default function PatientDetailPage() {
   });
 
   const TabComponent = TAB_COMPONENTS[activeTab];
-  const tabConfig = RECORD_REGISTRY[activeTab];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
@@ -99,7 +123,9 @@ export default function PatientDetailPage() {
                 <FiArrowLeft size={20} className="text-gray-600" />
               </Link>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">{patient?.name || 'Patient'}</h1>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  {loadingCritical ? <span className="inline-block h-7 w-40 animate-pulse rounded bg-gray-200" /> : (patient?.name || 'Patient')}
+                </h1>
                 <p className="text-sm text-gray-500">{patientId}</p>
               </div>
             </div>
@@ -117,31 +143,36 @@ export default function PatientDetailPage() {
       {/* Tabs */}
       <div className="border-b border-gray-200 bg-white sticky top-0 z-10">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="flex gap-1 overflow-x-auto pb-0">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {createElement(tab.iconType)} {tab.label}
-              </button>
-            ))}
+          {/* Fade edge on right to signal scrollability */}
+          <div className="relative">
+            <div className="flex gap-1 overflow-x-auto pb-0 scrollbar-hide">
+              {TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                    activeTab === tab.id
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {createElement(tab.iconType)} {tab.label}
+                </button>
+              ))}
+            </div>
+            {/* Scroll-right affordance */}
+            <div className="pointer-events-none absolute right-0 top-0 h-full w-12 bg-gradient-to-l from-white to-transparent" />
           </div>
         </div>
       </div>
 
       {/* Content */}
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        {loading ? (
+        {loadingCritical ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-              <p className="text-gray-500">Loading patient details...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4" />
+              <p className="text-gray-500">Loading patient…</p>
             </div>
           </div>
         ) : (
@@ -163,19 +194,27 @@ export default function PatientDetailPage() {
                 <LabsTab patientId={patientId} labResults={labResults} onLabsUpdate={setLabResults} />
               )}
               {activeTab === 'imaging' && (
-                <ImagingTab patientId={patientId} imaging={imaging} onImagingUpdate={setImaging} />
+                !loadedTabs.has('imaging')
+                  ? <div className="text-center text-gray-500 py-12">Loading…</div>
+                  : <ImagingTab patientId={patientId} imaging={imaging} onImagingUpdate={setImaging} />
               )}
               {activeTab === 'pathology' && (
-                <PathologyTab patientId={patientId} pathology={pathology} onPathologyUpdate={setPathology} />
+                !loadedTabs.has('pathology')
+                  ? <div className="text-center text-gray-500 py-12">Loading…</div>
+                  : <PathologyTab patientId={patientId} pathology={pathology} onPathologyUpdate={setPathology} />
               )}
               {activeTab === 'vitals' && (
                 <VitalsTab patientId={patientId} vitals={vitals} onVitalsUpdate={setVitals} />
               )}
               {activeTab === 'notes' && (
-                <NotesTab patientId={patientId} notes={notes} onNotesUpdate={setNotes} />
+                !loadedTabs.has('notes')
+                  ? <div className="text-center text-gray-500 py-12">Loading…</div>
+                  : <NotesTab patientId={patientId} notes={notes} onNotesUpdate={setNotes} />
               )}
               {activeTab === 'documents' && (
-                <DocumentsTab patientId={patientId} documents={documents} onDocumentsUpdate={setDocuments} />
+                !loadedTabs.has('documents')
+                  ? <div className="text-center text-gray-500 py-12">Loading…</div>
+                  : <DocumentsTab patientId={patientId} documents={documents} onDocumentsUpdate={setDocuments} />
               )}
               {activeTab === 'care-team' && (
                 <CareTeamTab patientId={patientId} careTeam={careTeam} onCareTeamUpdate={setCareTeam} />

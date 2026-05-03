@@ -14,7 +14,13 @@ export function registerPatientRoutes(
   const authScope = [...auth, (fastify as any).requirePatientAccess];
 
   fastify.get("/patients", { preHandler: auth }, async (request, reply) => {
-    return await patientRepo.findMany();
+    const user = (request as any).user as { sub: string; role: string };
+    // ADMIN sees all patients; COORDINATORs see their assigned patients plus
+    // unassigned patients (null assignedCoordinatorId) during the backfill window.
+    if (user.role === "ADMIN") {
+      return await patientRepo.findMany();
+    }
+    return await patientRepo.findMany({ coordinatorId: user.sub });
   });
 
   fastify.get("/patients/:id", { preHandler: authScope }, async (request, reply) => {

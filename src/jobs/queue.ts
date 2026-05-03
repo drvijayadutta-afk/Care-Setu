@@ -15,6 +15,23 @@ export const appointmentQueue = new Queue("appointments", { connection: redisCon
 export const doctorSignalQueue = new Queue("doctor-signals", { connection: redisConnection });
 export const briefQueue = new Queue("visit-briefs", { connection: redisConnection });
 
+// Inbox queue — durable buffer for incoming webhook payloads. Producers enqueue
+// before acking 200 so a downstream failure leads to a BullMQ retry, not a lost
+// patient message.
+export const inboxQueue = new Queue("inbox", {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 5,
+    backoff: { type: "exponential", delay: 2000 },
+    removeOnComplete: { age: 60 * 60, count: 1000 },
+    removeOnFail: { age: 7 * 24 * 60 * 60 },
+  },
+});
+
+export type InboxJobData =
+  | { source: "whatsapp"; payload: any }
+  | { source: "telegram"; payload: any };
+
 // Job type definitions
 export type CheckinJobData = {
   patientId: string;

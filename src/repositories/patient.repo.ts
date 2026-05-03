@@ -6,11 +6,20 @@ export class PatientRepository implements IPatientRepository {
     return prisma.patient.findUnique({ where: { id } });
   }
 
-  async findMany(opts = {}) {
+  async findMany(opts: { coordinatorId?: string; take?: number; orderBy?: any } = {}) {
+    const { coordinatorId, ...rest } = opts;
     return prisma.patient.findMany({
       orderBy: { createdAt: "desc" },
       take: 50,
-      ...opts,
+      ...(coordinatorId !== undefined && {
+        where: {
+          OR: [
+            { assignedCoordinatorId: coordinatorId },
+            { assignedCoordinatorId: null },
+          ],
+        },
+      }),
+      ...rest,
     });
   }
 

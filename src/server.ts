@@ -11,6 +11,7 @@ import {
 import { handleTelegramWebhook } from "./telegram/handler";
 import { setWebhook as setTelegramWebhook } from "./telegram/sender";
 import {
+  inboxWorker,
   checkinWorker,
   appointmentWorker,
   doctorSignalWorker,
@@ -143,6 +144,9 @@ async function start() {
       );
       console.log(`🤖 Telegram webhook registered: ${backendUrl}/webhook/telegram`);
     }
+
+    // Touch workers to ensure they are registered before logging
+    void inboxWorker;
 
     console.log(`🚀 Care Setu server running on port ${config.port}`);
     console.log(`📱 WhatsApp webhook: /webhook`);

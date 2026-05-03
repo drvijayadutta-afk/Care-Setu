@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useCoordinatorStore } from '@/lib/store';
 import Link from 'next/link';
 import { FiLogOut, FiUsers, FiHome } from 'react-icons/fi';
+import { ToastProvider } from '@/lib/toast';
 
 export default function DashboardLayout({
   children,
@@ -73,6 +74,8 @@ export default function DashboardLayout({
       <main className="flex-1 overflow-auto">
         <div className="p-8">{children}</div>
       </main>
+
+      <ToastProvider />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { handleEmotionalSupport } from "../modules/emotional/support";
 import { handleOnboarding } from "../modules/onboarding/flow";
 import { handleCaregiverMessage } from "../modules/caregiver/track";
 import { handleMedicationQuery } from "../modules/medications/context";
+import { inboxQueue } from "../jobs/queue";
 
 interface InternalMessage {
   id: string;
@@ -26,75 +27,67 @@ export async function handleTelegramWebhook(
   request: FastifyRequest,
   reply: FastifyReply
 ) {
-  // Always reply 200 immediately so Telegram doesn't retry
-  reply.status(200).send("OK");
-
   const body = request.body as any;
-  console.log("📨 Telegram update:", JSON.stringify(body).slice(0, 300));
 
   try {
-    // Regular text/voice message
-    if (body?.message) {
-      const msg = body.message;
-      const chatId = msg.chat.id.toString();
-      console.log(`💬 From: ${chatId} | Text: ${msg.text}`);
-
-      let internal: InternalMessage = {
-        id: msg.message_id.toString(),
-        from: chatId,
-        timestamp: new Date(msg.date * 1000).toISOString(),
-        type: "text",
-      };
-
-      if (msg.text) {
-        internal.type = "text";
-        internal.text = { body: msg.text };
-      } else if (msg.voice || msg.audio) {
-        const audio = msg.voice || msg.audio;
-        internal.type = "audio";
-        internal.audio = { id: audio.file_id, mime_type: audio.mime_type || "audio/ogg" };
-      } else {
-        console.log("⏭️ Unsupported message type, skipping");
-        return;
-      }
-
-      try {
-        await processMessage(internal);
-      } catch (err: any) {
-        console.error("❌ processMessage failed:", err?.message || err);
-        // Fallback reply so user is never left hanging
-        const tgChannel = getTelegramChannel();
-        await tgChannel
-          .sendText({ kind: "telegram", chatId }, "🙏 *Welcome to Care Setu!*\n\nI'm your cancer care companion. Please send \"Hello\" to begin your registration.")
-          .catch((e) => console.error("Fallback send failed:", e));
-      }
-    }
-
-    // Button click (callback query)
-    if (body?.callback_query) {
-      const cb = body.callback_query;
-      const chatId = cb.message.chat.id.toString();
-      console.log(`🔘 Button click from: ${chatId} | Data: ${cb.data}`);
-
-      const internal: InternalMessage = {
-        id: cb.id,
-        from: chatId,
-        timestamp: new Date().toISOString(),
-        type: "interactive",
-        interactive: {
-          type: "button_reply",
-          button_reply: { id: cb.data, title: cb.data },
-        },
-      };
-
-      try {
-        await processMessage(internal);
-      } catch (err: any) {
-        console.error("❌ processMessage (callback) failed:", err?.message || err);
-      }
-    }
+    await inboxQueue.add("telegram", { source: "telegram", payload: body });
+    return reply.status(200).send("OK");
   } catch (err: any) {
-    console.error("❌ Telegram webhook outer error:", err?.message || err);
+    console.error("❌ Telegram inbox enqueue failed:", err?.message || err);
+    return reply.status(503).send({ error: "Queue unavailable, please retry" });
+  }
+}
+
+export async function processTelegramUpdate(body: any): Promise<void> {
+  if (body?.message) {
+    const msg = body.message;
+    const chatId = msg.chat.id.toString();
+
+    let internal: InternalMessage = {
+      id: msg.message_id.toString(),
+      from: chatId,
+      timestamp: new Date(msg.date * 1000).toISOString(),
+      type: "text",
+    };
+
+    if (msg.text) {
+      internal.type = "text";
+      internal.text = { body: msg.text };
+    } else if (msg.voice || msg.audio) {
+      const audio = msg.voice || msg.audio;
+      internal.type = "audio";
+      internal.audio = { id: audio.file_id, mime_type: audio.mime_type || "audio/ogg" };
+    } else {
+      return;
+    }
+
+    try {
+      await processMessage(internal);
+    } catch (err: any) {
+      const tgChannel = getTelegramChannel();
+      await tgChannel
+        .sendText({ kind: "telegram", chatId }, "🙏 *Welcome to Care Setu!*\n\nI'm your cancer care companion. Please send \"Hello\" to begin your registration.")
+        .catch((e) => console.error("Fallback send failed:", e));
+      throw err;
+    }
+  }
+
+  if (body?.callback_query) {
+    const cb = body.callback_query;
+    const chatId = cb.message.chat.id.toString();
+
+    const internal: InternalMessage = {
+      id: cb.id,
+      from: chatId,
+      timestamp: new Date().toISOString(),
+      type: "interactive",
+      interactive: {
+        type: "button_reply",
+        button_reply: { id: cb.data, title: cb.data },
+      },
+    };
+
+    await processMessage(internal);
   }
 }
 

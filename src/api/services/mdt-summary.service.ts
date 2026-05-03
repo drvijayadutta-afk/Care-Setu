@@ -6,7 +6,11 @@ export async function getMdtSummary(patientId: string, aiPort: AiPort) {
     where: { id: patientId },
     include: {
       checkins: { orderBy: { createdAt: "desc" }, take: 14 },
-      medications: { where: { isActive: true } },
+      medications: {
+        where: { isActive: true },
+        take: 10,
+        select: { id: true, name: true, genericName: true, purpose: true, frequency: true, timing: true, sideEffects: true },
+      },
       appointments: { orderBy: { scheduledAt: "desc" }, take: 5 },
       alerts: { where: { resolved: false } },
       labResults: { where: { isDeleted: false }, orderBy: { testDate: "desc" }, take: 30 },

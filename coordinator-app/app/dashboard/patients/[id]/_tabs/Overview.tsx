@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { FiRefreshCw } from 'react-icons/fi';
+import { FiRefreshCw, FiAlertTriangle, FiAlertCircle, FiActivity, FiUsers } from 'react-icons/fi';
 import { getMdtSummary, Patient, LabResult, VitalSign, CareTeamMember } from '@/lib/api';
 import { ROLE_LABELS, FLAG_COLORS } from '@/lib/recordRegistry';
+import { toast } from '@/lib/toast';
 
 interface OverviewTabProps {
   patientId: string;
@@ -24,7 +25,7 @@ export function OverviewTab({ patientId, patient, labResults, vitals, careTeam }
       setMdtSummary(summary);
     } catch (e) {
       console.error(e);
-      alert('Failed to generate MDT summary');
+      toast({ type: 'error', message: 'MDT summary generation failed — check AI service and retry' });
     } finally {
       setMdtLoading(false);
     }
@@ -32,9 +33,52 @@ export function OverviewTab({ patientId, patient, labResults, vitals, careTeam }
 
   const latestVitals = vitals.length > 0 ? vitals[0] : null;
   const abnormalLabs = labResults.filter(l => l.flag && l.flag !== 'NORMAL');
+  const criticalLabs = abnormalLabs.filter(l => l.flag === 'CRITICAL');
 
   return (
     <div className="space-y-6">
+      {/* Risk Strip — at-a-glance summary */}
+      {patient && (
+        <div className="flex flex-wrap gap-2">
+          {criticalLabs.length > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-800">
+              <FiAlertCircle size={13} />
+              {criticalLabs.length} CRITICAL {criticalLabs.length === 1 ? 'lab' : 'labs'}
+            </span>
+          )}
+          {abnormalLabs.length > 0 && criticalLabs.length === 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-orange-100 px-3 py-1.5 text-xs font-semibold text-orange-800">
+              <FiAlertTriangle size={13} />
+              {abnormalLabs.length} abnormal {abnormalLabs.length === 1 ? 'lab' : 'labs'}
+            </span>
+          )}
+          {patient.stage && (
+            <span className="flex items-center gap-1 rounded-full bg-indigo-100 px-3 py-1.5 text-xs font-medium text-indigo-800">
+              Stage: {patient.stage}
+            </span>
+          )}
+          {latestVitals?.ecogScore != null && (
+            <span className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium ${
+              latestVitals.ecogScore >= 3 ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700'
+            }`}>
+              <FiActivity size={13} />
+              ECOG {latestVitals.ecogScore}
+            </span>
+          )}
+          {careTeam.length > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-green-100 px-3 py-1.5 text-xs font-medium text-green-800">
+              <FiUsers size={13} />
+              {careTeam.length}-member care team
+            </span>
+          )}
+          {patient.cancerType && (
+            <span className="rounded-full bg-purple-100 px-3 py-1.5 text-xs font-medium text-purple-800">
+              {patient.cancerType}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Patient Demographics */}
       {patient && (
         <div className="rounded-lg border border-gray-200 p-4">

@@ -9,6 +9,7 @@ import { handleOnboarding } from "../modules/onboarding/flow";
 import { handleCaregiverMessage } from "../modules/caregiver/track";
 import { handleMedicationQuery } from "../modules/medications/context";
 import { transcribeVoiceNote } from "../integrations/whisper";
+import { inboxQueue } from "../jobs/queue";
 
 interface WhatsAppMessage {
   id: string;
@@ -43,10 +44,20 @@ export async function handleWebhookMessage(
   request: FastifyRequest,
   reply: FastifyReply
 ) {
-  reply.status(200).send("OK");
-
   const body = request.body as any;
 
+  // Enqueue before acking — if enqueue fails, return 503 so the provider retries.
+  try {
+    await inboxQueue.add("whatsapp", { source: "whatsapp", payload: body });
+    return reply.status(200).send("OK");
+  } catch (err: any) {
+    console.error("❌ WhatsApp inbox enqueue failed:", err?.message || err);
+    return reply.status(503).send({ error: "Queue unavailable, please retry" });
+  }
+}
+
+// Called by the inbox worker after dequeuing — contains the original dispatch logic.
+export async function processWhatsAppPayload(body: any): Promise<void> {
   // Aisensy format
   if (body?.phoneNumber && body?.message) {
     const message: WhatsAppMessage = {
@@ -56,9 +67,7 @@ export async function handleWebhookMessage(
       type: "text",
       text: { body: body.message },
     };
-    await processMessage(message, "aisensy").catch(
-      (err) => console.error("Error processing message:", err)
-    );
+    await processMessage(message, "aisensy");
     return;
   }
 
@@ -69,11 +78,8 @@ export async function handleWebhookMessage(
     for (const change of entry.changes || []) {
       if (change.field !== "messages") continue;
       const value = change.value;
-
       for (const message of value?.messages || []) {
-        await processMessage(message, value?.metadata?.phone_number_id).catch(
-          (err) => console.error("Error processing message:", err)
-        );
+        await processMessage(message, value?.metadata?.phone_number_id);
       }
     }
   }

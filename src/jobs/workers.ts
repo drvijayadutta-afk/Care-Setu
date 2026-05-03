@@ -10,7 +10,30 @@ import type {
   AlertJobData,
   AppointmentReminderJobData,
   BriefJobData,
+  InboxJobData,
 } from "./queue";
+
+// Inbox worker — drains the durable webhook inbox queue.
+// Errors thrown here trigger BullMQ retry with exponential back-off.
+export const inboxWorker = new Worker(
+  "inbox",
+  async (job) => {
+    const data = job.data as InboxJobData;
+
+    if (data.source === "whatsapp") {
+      const { processWhatsAppPayload } = await import("../webhook/handler");
+      await processWhatsAppPayload(data.payload);
+    } else if (data.source === "telegram") {
+      const { processTelegramUpdate } = await import("../telegram/handler");
+      await processTelegramUpdate(data.payload);
+    }
+  },
+  { connection: redisConnection, concurrency: 5 }
+);
+
+inboxWorker.on("failed", (job, err) => {
+  console.error(`Inbox job ${job?.id} (${(job?.data as any)?.source}) failed:`, err.message);
+});
 
 // Check-in worker
 export const checkinWorker = new Worker(
@@ -77,6 +100,7 @@ doctorSignalWorker.on("failed", (job, err) => {
 
 export function gracefulShutdown() {
   return Promise.all([
+    inboxWorker.close(),
     checkinWorker.close(),
     appointmentWorker.close(),
     doctorSignalWorker.close(),
