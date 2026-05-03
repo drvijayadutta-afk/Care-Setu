@@ -486,7 +486,7 @@ export const signOffParticipant = async (
 };
 
 export const generateMeetingBrief = async (meetingId: string) => {
-  const { data } = await api.post(`/tumor-board-meetings/${meetingId}/brief`);
+  const { data } = await api.post(`/tumor-board-meetings/${meetingId}/brief`, {});
   return data as { briefText: string };
 };
 

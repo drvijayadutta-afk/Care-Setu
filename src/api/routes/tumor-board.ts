@@ -122,8 +122,12 @@ export function registerTumorBoardRoutes(fastify: FastifyInstance, aiPort: AiPor
     return participant;
   });
 
-  // Generate AI brief and snapshot it into the meeting record
-  fastify.post("/tumor-board-meetings/:mid/brief", { preHandler: auth }, async (request, reply) => {
+  // Generate AI brief and snapshot it into the meeting record.
+  // No request body needed — schema marks body as optional so Fastify accepts empty or {} POSTs.
+  fastify.post("/tumor-board-meetings/:mid/brief", {
+    preHandler: auth,
+    schema: { body: { type: "object", additionalProperties: true } },
+  }, async (request, reply) => {
     const { mid } = request.params as { mid: string };
     const meeting = await prisma.tumorBoardMeeting.findUnique({ where: { id: mid } });
     if (!meeting) return reply.status(404).send({ error: "Meeting not found" });
