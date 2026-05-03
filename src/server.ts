@@ -81,11 +81,24 @@ function startAisensyPolling() {
 
 async function start() {
   try {
-    // Add CORS support — restrict to known frontend origins
+    // Add CORS support — allow configured origins plus always-valid patterns
+    const allowedSet = new Set(config.allowedOrigins.map(o => o.toLowerCase()));
     await fastify.register(cors, {
-      origin: config.allowedOrigins,
+      origin: (origin, cb) => {
+        if (!origin) return cb(null, true); // non-browser (curl/server) — allow
+        const o = origin.toLowerCase();
+        if (
+          allowedSet.has(o) ||
+          o.endsWith(".vercel.app") ||
+          o.startsWith("http://localhost:")
+        ) {
+          return cb(null, true);
+        }
+        cb(new Error("CORS: origin not allowed"), false);
+      },
       methods: ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
       allowedHeaders: ["Authorization", "Content-Type"],
+      credentials: true,
     });
 
     // Rate limiting — 15-minute windows, configurable per endpoint

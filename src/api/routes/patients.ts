@@ -125,6 +125,36 @@ export function registerPatientRoutes(
     });
   });
 
+  fastify.get("/patients/:id/alerts", { preHandler: authScope }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const query = request.query as { resolved?: string; limit?: string };
+    const where: any = { patientId: id };
+    if (query.resolved !== undefined) where.resolved = query.resolved === "true";
+    return await prisma.alert.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: Math.min(Number(query.limit ?? 50), 100),
+    });
+  });
+
+  fastify.get("/patients/:id/medications", { preHandler: authScope }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return await prisma.medication.findMany({
+      where: { patientId: id },
+      orderBy: { createdAt: "desc" },
+    });
+  });
+
+  fastify.delete("/patients/:id", { preHandler: auth }, async (request, reply) => {
+    const user = (request as any).user as { role: string };
+    if (user.role !== "ADMIN") return reply.status(403).send({ error: "ADMIN role required" });
+    const { id } = request.params as { id: string };
+    const patient = await patientRepo.findUnique(id);
+    if (!patient) return reply.status(404).send({ error: "Patient not found" });
+    await prisma.patient.update({ where: { id }, data: { isActive: false } });
+    return reply.status(204).send();
+  });
+
   fastify.get("/patients/:id/mdt-summary", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
