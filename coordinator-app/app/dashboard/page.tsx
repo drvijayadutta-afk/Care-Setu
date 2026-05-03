@@ -29,6 +29,13 @@ const SEVERITY_BADGE: Record<string, string> = {
   LOW:      'bg-blue-400 text-white',
 };
 
+const SEVERITY_LABEL: Record<string, string> = {
+  CRITICAL: '⚠ Critical Alert',
+  HIGH:     'High Alert',
+  MEDIUM:   'Medium Alert',
+  LOW:      'Low Alert',
+};
+
 export default function DashboardPage() {
   const { setPatients, coordinatorRole } = useCoordinatorStore();
   const isAdmin = coordinatorRole === 'ADMIN';
@@ -163,22 +170,25 @@ export default function DashboardPage() {
           <div className="rounded-lg bg-white p-6 shadow">
             <div className="text-sm text-gray-600">Total Patients</div>
             <div className="mt-2 text-3xl font-bold text-gray-900">{allPatients.length}</div>
+            <div className="text-xs text-gray-400 mt-1">Under your care</div>
           </div>
           <div className="rounded-lg bg-white p-6 shadow">
             <div className="flex items-center text-sm text-gray-600">
-              <FiCheckCircle className="mr-2" /> Onboarded
+              <FiCheckCircle className="mr-2 text-green-500" /> Active on WhatsApp
             </div>
             <div className="mt-2 text-3xl font-bold text-green-600">
               {allPatients.filter(p => p.onboardingStep >= 9).length}
             </div>
+            <div className="text-xs text-gray-400 mt-1">Receiving check-ins &amp; reminders</div>
           </div>
           <div className="rounded-lg bg-white p-6 shadow">
             <div className="flex items-center text-sm text-gray-600">
-              <FiClock className="mr-2" /> In Progress
+              <FiClock className="mr-2 text-yellow-500" /> Onboarding in Progress
             </div>
             <div className="mt-2 text-3xl font-bold text-yellow-600">
               {allPatients.filter(p => p.onboardingStep < 9).length}
             </div>
+            <div className="text-xs text-gray-400 mt-1">Haven't completed WhatsApp setup</div>
           </div>
         </div>
 
@@ -241,14 +251,16 @@ export default function DashboardPage() {
                       <div className="flex items-start gap-3">
                         {badge && (
                           <span className={`mt-1 flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${SEVERITY_BADGE[badge.severity] ?? 'bg-red-500 text-white'}`}>
-                            {badge.severity}
+                            {SEVERITY_LABEL[badge.severity] ?? badge.severity}
                           </span>
                         )}
                         <div>
                           <div className="font-semibold text-gray-900">{patient.name || 'Unnamed Patient'}</div>
-                          <div className="text-sm text-gray-600">{patient.whatsappNumber}</div>
+                          <div className="text-sm text-gray-500">{patient.hospitalName || patient.whatsappNumber}</div>
                           {patient.cancerType && (
-                            <div className="mt-1 text-sm text-gray-600">{patient.cancerType}</div>
+                            <div className="mt-1 text-sm text-gray-600">
+                              {patient.cancerType}{patient.stage ? ` — Stage ${patient.stage}` : ''}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -258,7 +270,7 @@ export default function DashboardPage() {
                             ? 'bg-green-100 text-green-800'
                             : 'bg-yellow-100 text-yellow-800'
                         }`}>
-                          {patient.onboardingStep >= 9 ? 'Onboarded' : `Step ${patient.onboardingStep}/9`}
+                          {patient.onboardingStep >= 9 ? 'Active on WhatsApp' : `Setup step ${patient.onboardingStep}/9`}
                         </span>
                       </div>
                     </div>

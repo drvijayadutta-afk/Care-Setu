@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { FiPlus } from 'react-icons/fi';
+import { FiPlus, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import { createLabResult, getPatientLabResults, LabResult } from '@/lib/api';
 import { FLAG_COLORS } from '@/lib/recordRegistry';
 import { useFormDraft } from '@/lib/useFormDraft';
 import { toast } from '@/lib/toast';
+import { Tooltip } from '@/components/Tooltip';
 
 interface LabsTabProps {
   patientId: string;
@@ -13,20 +14,48 @@ interface LabsTabProps {
   onLabsUpdate: (labs: LabResult[]) => void;
 }
 
-const EMPTY_FORM = { testDate: '', category: 'CBC', testName: '', value: '', unit: '', refMin: '', refMax: '', flag: '', notes: '' };
+const EMPTY_FORM = {
+  testDate: '', category: 'CBC', testName: '', value: '', unit: '',
+  refMin: '', refMax: '', flag: '', notes: '',
+};
+
+const LAB_CATEGORIES: { value: string; label: string }[] = [
+  { value: 'CBC',           label: 'Complete Blood Count (CBC)' },
+  { value: 'LFT',           label: 'Liver Function Tests (LFT)' },
+  { value: 'KFT',           label: 'Kidney Function Tests (KFT)' },
+  { value: 'TUMOUR_MARKER', label: 'Tumour Markers (CA-125, PSA, CEA…)' },
+  { value: 'COAGULATION',   label: 'Coagulation / Clotting Profile' },
+  { value: 'URINE',         label: 'Urine Analysis' },
+  { value: 'OTHER',         label: 'Other' },
+];
+
+const FLAG_LABELS: Record<string, { label: string; hint: string }> = {
+  NORMAL:   { label: 'Normal',    hint: 'Within the expected reference range' },
+  LOW:      { label: 'Low ↓',     hint: 'Below the lower limit of normal' },
+  HIGH:     { label: 'High ↑',    hint: 'Above the upper limit of normal' },
+  CRITICAL: { label: '⚠ Critical', hint: 'Significantly outside safe limits — review immediately' },
+};
+
+const FLAG_BADGE: Record<string, string> = {
+  NORMAL:   'bg-green-100 text-green-800',
+  LOW:      'bg-blue-100 text-blue-800',
+  HIGH:     'bg-orange-100 text-orange-800',
+  CRITICAL: 'bg-red-100 text-red-800 font-semibold',
+};
 
 export function LabsTab({ patientId, labResults, onLabsUpdate }: LabsTabProps) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { clearDraft } = useFormDraft(`lab-draft-${patientId}`, form, setForm);
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!form.testDate) e.testDate = 'Required';
-    if (!form.testName.trim()) e.testName = 'Required';
+    if (!form.testDate) e.testDate = 'Date is required';
+    if (!form.testName.trim()) e.testName = 'Test name is required';
     return e;
   };
 
@@ -48,67 +77,127 @@ export function LabsTab({ patientId, labResults, onLabsUpdate }: LabsTabProps) {
       setForm(EMPTY_FORM);
       setShowForm(false);
       toast({ type: 'success', message: 'Lab result saved' });
-      const updated = await getPatientLabResults(patientId);
-      onLabsUpdate(updated);
+      onLabsUpdate(await getPatientLabResults(patientId));
     } catch {
-      toast({ type: 'error', message: 'Failed to save lab result — check your connection and try again' });
+      toast({ type: 'error', message: 'Could not save — check your connection and try again' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const field = (key: keyof typeof EMPTY_FORM) =>
-    errors[key] ? 'rounded border border-red-400 px-2 py-1.5 text-sm ring-1 ring-red-400' : 'rounded border px-2 py-1.5 text-sm';
+  const inp = (key: keyof typeof EMPTY_FORM) =>
+    `w-full rounded border px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 ${errors[key] ? 'border-red-400 ring-1 ring-red-400' : 'border-gray-300'}`;
+
+  const catLabel = (val: string) => LAB_CATEGORIES.find(c => c.value === val)?.label ?? val;
 
   return (
     <div>
       <div className="flex justify-between mb-4">
         <h3 className="font-semibold text-gray-800">Lab Results</h3>
         <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-1 rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700"
+          onClick={() => { setShowForm(!showForm); setErrors({}); }}
+          className="flex items-center gap-1.5 rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700"
         >
-          <FiPlus /> Add
+          <FiPlus size={14} /> Record Lab Result
         </button>
       </div>
 
       {showForm && (
-        <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-2">
-          <div className="grid grid-cols-3 gap-2">
-            <div className="flex flex-col gap-0.5">
-              <input type="date" value={form.testDate} onChange={e => setForm({ ...form, testDate: e.target.value })} className={field('testDate')} />
+        <div className="mb-5 rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+          <p className="text-xs text-indigo-700 font-medium">Enter the lab result details below. Fields marked * are required.</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Date */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">Test Date *</label>
+              <input type="date" value={form.testDate}
+                onChange={e => setForm({ ...form, testDate: e.target.value })}
+                className={inp('testDate')} />
               {errors.testDate && <span className="text-xs text-red-600">{errors.testDate}</span>}
             </div>
-            <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className={field('category')}>
-              {['CBC', 'LFT', 'KFT', 'TUMOUR_MARKER', 'COAGULATION', 'URINE', 'OTHER'].map(c => <option key={c}>{c}</option>)}
-            </select>
-            <div className="flex flex-col gap-0.5">
-              <input placeholder="Test Name *" value={form.testName} onChange={e => setForm({ ...form, testName: e.target.value })} className={field('testName')} />
+
+            {/* Category */}
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <label className="text-xs font-medium text-gray-700">Category</label>
+              <select value={form.category}
+                onChange={e => setForm({ ...form, category: e.target.value })}
+                className={inp('category')}>
+                {LAB_CATEGORIES.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Test Name */}
+            <div className="flex flex-col gap-1 sm:col-span-3">
+              <label className="text-xs font-medium text-gray-700">Test Name *</label>
+              <input placeholder="e.g. Haemoglobin, WBC Count, CA 15-3"
+                value={form.testName}
+                onChange={e => setForm({ ...form, testName: e.target.value })}
+                className={inp('testName')} />
               {errors.testName && <span className="text-xs text-red-600">{errors.testName}</span>}
             </div>
-            <input placeholder="Value" type="number" value={form.value} onChange={e => setForm({ ...form, value: e.target.value })} className={field('value')} />
-            <input placeholder="Unit" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} className={field('unit')} />
-            <select value={form.flag} onChange={e => setForm({ ...form, flag: e.target.value })} className={field('flag')}>
-              <option value="">Normal / Flag</option>
-              {['NORMAL', 'LOW', 'HIGH', 'CRITICAL'].map(f => <option key={f}>{f}</option>)}
-            </select>
-            <input placeholder="Ref Min" type="number" value={form.refMin} onChange={e => setForm({ ...form, refMin: e.target.value })} className={`${field('refMin')} col-span-3`} />
-            <input placeholder="Ref Max" type="number" value={form.refMax} onChange={e => setForm({ ...form, refMax: e.target.value })} className={`${field('refMax')} col-span-3`} />
-            <textarea placeholder="Notes" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className={`${field('notes')} col-span-3`} rows={2} />
+
+            {/* Value + Unit */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">Result Value</label>
+              <input placeholder="e.g. 8.9" type="number" step="any"
+                value={form.value}
+                onChange={e => setForm({ ...form, value: e.target.value })}
+                className={inp('value')} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">Unit</label>
+              <input placeholder="e.g. g/dL, 10³/µL, U/mL"
+                value={form.unit}
+                onChange={e => setForm({ ...form, unit: e.target.value })}
+                className={inp('unit')} />
+            </div>
+
+            {/* Flag */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">Result Status</label>
+              <select value={form.flag}
+                onChange={e => setForm({ ...form, flag: e.target.value })}
+                className={inp('flag')}>
+                <option value="">— Select status —</option>
+                {Object.entries(FLAG_LABELS).map(([val, { label }]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Reference range */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">Normal Range — Min</label>
+              <input placeholder="e.g. 4.0" type="number" step="any"
+                value={form.refMin}
+                onChange={e => setForm({ ...form, refMin: e.target.value })}
+                className={inp('refMin')} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">Normal Range — Max</label>
+              <input placeholder="e.g. 10.0" type="number" step="any"
+                value={form.refMax}
+                onChange={e => setForm({ ...form, refMax: e.target.value })}
+                className={inp('refMax')} />
+            </div>
+            <div className="flex flex-col gap-1 sm:col-span-3">
+              <label className="text-xs font-medium text-gray-700">Clinical Notes (optional)</label>
+              <textarea placeholder="Any additional observations…"
+                value={form.notes}
+                onChange={e => setForm({ ...form, notes: e.target.value })}
+                className={inp('notes')} rows={2} />
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleAdd}
-              disabled={submitting}
-              className="flex-1 rounded bg-indigo-600 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {submitting ? 'Saving…' : 'Create'}
+
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleAdd} disabled={submitting}
+              className="flex-1 rounded bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+              {submitting ? 'Saving…' : 'Save Lab Result'}
             </button>
-            <button
-              onClick={() => { setShowForm(false); setErrors({}); }}
-              disabled={submitting}
-              className="flex-1 rounded bg-gray-300 py-2 text-sm disabled:opacity-50"
-            >
+            <button onClick={() => { setShowForm(false); setErrors({}); }} disabled={submitting}
+              className="flex-1 rounded border border-gray-300 bg-white py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
               Cancel
             </button>
           </div>
@@ -116,21 +205,57 @@ export function LabsTab({ patientId, labResults, onLabsUpdate }: LabsTabProps) {
       )}
 
       <div className="space-y-2">
-        {labResults.map(l => (
-          <div key={l.id} className="flex items-center justify-between rounded border border-gray-200 p-3 text-sm">
-            <div>
-              <div className="font-semibold">{l.testName}</div>
-              <div className="text-xs text-gray-500">{l.category}</div>
+        {labResults.map(l => {
+          const flagInfo = FLAG_LABELS[l.flag ?? ''];
+          const badgeCls = FLAG_BADGE[l.flag ?? ''] ?? 'bg-gray-100 text-gray-700';
+          const hasRef = l.refMin != null || l.refMax != null;
+          const isExpanded = expandedId === l.id;
+
+          return (
+            <div key={l.id}
+              className={`rounded border ${l.flag === 'CRITICAL' ? 'border-red-300 bg-red-50' : l.flag === 'HIGH' || l.flag === 'LOW' ? 'border-orange-200 bg-orange-50' : 'border-gray-200 bg-white'}`}>
+              <button
+                className="w-full flex items-center justify-between p-3 text-left"
+                onClick={() => setExpandedId(isExpanded ? null : l.id)}
+              >
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900">{l.testName}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">{catLabel(l.category)} · {new Date(l.testDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="font-semibold text-gray-900">{l.value != null ? `${l.value} ${l.unit ?? ''}`.trim() : '—'}</div>
+                    {hasRef && (
+                      <div className="text-xs text-gray-400">
+                        Ref: {l.refMin ?? '?'}–{l.refMax ?? '?'} {l.unit ?? ''}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                  {flagInfo ? (
+                    <Tooltip content={flagInfo.hint}>
+                      <span className={`rounded px-2 py-0.5 text-xs ${badgeCls}`}>{flagInfo.label}</span>
+                    </Tooltip>
+                  ) : null}
+                  {isExpanded ? <FiChevronUp size={14} className="text-gray-400" /> : <FiChevronDown size={14} className="text-gray-400" />}
+                </div>
+              </button>
+
+              {isExpanded && l.notes && (
+                <div className="px-3 pb-3 pt-0 text-xs text-gray-600 border-t border-gray-100 mt-1">
+                  <span className="font-medium">Notes: </span>{l.notes}
+                </div>
+              )}
             </div>
-            <div className="text-center">
-              <div className="font-semibold">{l.value} {l.unit}</div>
-              <div className="text-xs text-gray-400">{new Date(l.testDate).toLocaleDateString()}</div>
-            </div>
-            {l.flag && <span className={`rounded px-2 py-0.5 text-xs ${FLAG_COLORS[l.flag] ?? 'bg-gray-100'}`}>{l.flag}</span>}
-          </div>
-        ))}
+          );
+        })}
+
         {labResults.length === 0 && (
-          <p className="text-center text-gray-400 py-8">No lab results yet. Click <strong>Add</strong> to record one.</p>
+          <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center">
+            <p className="text-gray-500 text-sm">No lab results recorded yet.</p>
+            <p className="text-gray-400 text-xs mt-1">Click <strong>Record Lab Result</strong> above to add the first one.</p>
+          </div>
         )}
       </div>
     </div>
