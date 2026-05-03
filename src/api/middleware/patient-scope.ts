@@ -49,14 +49,13 @@ export async function requirePatientAccess(
   });
 
   if (isOutOfScope) {
-    if (config.patientScopeEnforce) {
-      reply.status(403).send({ error: "Forbidden" });
-    } else {
-      // Log-only mode: warn but let the request through during rollout week.
-      // Flip PATIENT_SCOPE_ENFORCE=true once backfill + coordinator UI ship.
+    if (config.patientScopeNoEnforce) {
+      // Log-only mode — only allowed in local dev via PATIENT_SCOPE_NO_ENFORCE=true.
       console.warn(
-        `[patient-scope] WOULD DENY: coordinator=${user.sub} patient=${id} owner=${patient.assignedCoordinatorId ?? "unassigned"}`
+        `[patient-scope] WOULD DENY (enforcement disabled): coordinator=${user.sub} patient=${id} owner=${patient.assignedCoordinatorId ?? "unassigned"}`
       );
+    } else {
+      reply.status(403).send({ error: "Forbidden" });
     }
   }
 }

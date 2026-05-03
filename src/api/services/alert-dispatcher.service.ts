@@ -1,6 +1,7 @@
 import { prisma } from "../../db/client";
 import { sendText } from "../../webhook/sender";
 import { wsManager } from "../../websocket/manager";
+import { config } from "../../config/env";
 
 /**
  * Dispatch an Alert to:
@@ -63,9 +64,11 @@ export async function dispatchAlert(alertId: string): Promise<void> {
       ?? alert.patient.careTeamMembers[0];
     if (!primary?.phone) return;
 
-    const patientName = alert.patient.name || "patient";
+    // No patient name or clinical details in the message body — PHI is only
+    // accessible behind auth. The deep-link directs the coordinator to the patient.
     const severityIcon = alert.severity === "critical" ? "🚨" : "⚠️";
-    const msg = `${severityIcon} ALERT for ${patientName}: ${alert.message}. Open Care Setu to review.`;
+    const deepLink = `${config.coordinatorAppUrl}/dashboard/patients/${alert.patient.id}`;
+    const msg = `${severityIcon} Care Setu alert — action required.\nSeverity: ${alert.severity.toUpperCase()}\n\nLog in to review:\n${deepLink}`;
 
     const delivery = await prisma.alertDelivery.create({
       data: {

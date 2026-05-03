@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { IPatientRepository, IConversationRepository, IRecordRepository } from "../../repositories/types";
 import type { AiPort } from "../../ports/ai";
 import { getMdtSummary } from "../services/mdt-summary.service";
+import { logAccess } from "../services/audit-logger.service";
 import { prisma } from "../../db/client";
 
 export function registerPatientRoutes(
@@ -157,8 +158,20 @@ export function registerPatientRoutes(
 
   fastify.get("/patients/:id/mdt-summary", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const user = (request as any).user as { sub: string; role: string; hospitalName?: string };
     try {
       const summary = await getMdtSummary(id, aiPort);
+      logAccess({
+        coordinatorId: user.sub,
+        patientId: id,
+        action: "mdt_brief_generated",
+        resourceType: "patient_summary",
+        resourceId: id,
+        isOutOfScope: false,
+        isCrossHospital: false,
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"],
+      });
       return { summary };
     } catch (error: any) {
       if (error.message === "Patient not found") {

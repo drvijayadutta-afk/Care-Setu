@@ -3,6 +3,7 @@ import { prisma } from "../../db/client";
 import { sendText } from "../../webhook/sender";
 import { logOutbound } from "../services/outbound-logger.service";
 import { wsManager } from "../../websocket/manager";
+import { config } from "../../config/env";
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pending: ["accepted", "declined"],
@@ -50,10 +51,12 @@ export function registerReferralRoutes(fastify: FastifyInstance) {
       include: { toDoctor: true, fromCoordinator: { select: { name: true } } },
     });
 
-    // Notify referred doctor via WhatsApp if opted in
+    // Notify referred doctor via WhatsApp if opted in.
+    // No PHI in message body — clinical details are only accessible behind auth.
     if (toDoctor.isOptedIn && toDoctor.whatsappNumber) {
       const urgencyEmoji = body.urgency === "emergency" ? "🚨" : body.urgency === "urgent" ? "⚠️" : "📋";
-      const msg = `${urgencyEmoji} Referral — ${patient.name} (${patient.cancerType}${patient.stage ? `, Stage ${patient.stage}` : ""})\nFrom: ${user.name}\nUrgency: ${body.urgency ?? "routine"}\nReason: ${body.reason}\n\nLog in to Care Setu to view and accept.`;
+      const deepLink = `${config.coordinatorAppUrl}/dashboard/patients/${patientId}`;
+      const msg = `${urgencyEmoji} New referral assigned to you.\nUrgency: ${body.urgency ?? "routine"}\n\nLog in to Care Setu to view patient details and accept:\n${deepLink}`;
 
       try {
         const externalId = await sendText(toDoctor.whatsappNumber, msg);

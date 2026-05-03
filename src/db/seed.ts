@@ -604,7 +604,8 @@ async function seedCoordinator() {
     },
   });
 
-  console.log(`  ✅ Coordinator: ${email} / ${password}`);
+  // Never log plaintext credentials — use SEED_COORDINATOR_PASSWORD env var to set a custom password.
+  console.log(`  ✅ Coordinator: ${email} (password set via SEED_COORDINATOR_PASSWORD env var)`);
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────

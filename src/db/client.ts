@@ -5,8 +5,23 @@ import { config } from "../config/env";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
+function validateDataResidency(dbUrl: string) {
+  const isSupabase = dbUrl.includes("supabase.co") || dbUrl.includes("supabase");
+  if (isSupabase) {
+    // SPDI Rule 7 / DPDP data localisation: PHI must stay in India (ap-south-1 / Mumbai).
+    const isIndia = dbUrl.includes("aws-ap-south-1") || dbUrl.includes("ap-south-1");
+    if (!isIndia) {
+      console.error(
+        "[COMPLIANCE] ⚠️  Supabase connection does not appear to be in ap-south-1 (Mumbai). " +
+        "Health data must be stored in India to comply with SPDI Rule 7. Verify your project region."
+      );
+    }
+  }
+}
+
 function createPrismaClient() {
   const dbUrl = process.env.DATABASE_URL || "";
+  validateDataResidency(dbUrl);
 
   // Determine SSL requirement based on DATABASE_SSL config
   let needsSsl = false;
@@ -31,7 +46,9 @@ function createPrismaClient() {
     connectionTimeoutMillis: 15000,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,
-    ...(needsSsl && { ssl: { rejectUnauthorized: false } }),
+    // Always verify the server TLS certificate in production (SPDI Rule 8).
+    // Set DATABASE_SSL=disable only for local Postgres with self-signed certs.
+    ...(needsSsl && { ssl: { rejectUnauthorized: config.nodeEnv === "production" } }),
   });
 
   pool.on("error", (err) => {

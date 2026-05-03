@@ -1,5 +1,6 @@
 import { prisma } from "../../db/client";
 import { sendText } from "../../webhook/sender";
+import { config } from "../../config/env";
 
 /**
  * Notify a patient's care team when a new report (lab/imaging/pathology/document) is uploaded.
@@ -29,9 +30,10 @@ export async function notifyReportUploaded(documentId: string): Promise<void> {
     if (!doc) return;
     if (doc.patient.careTeamMembers.length === 0) return;
 
-    const patientLabel = doc.patient.name || "patient";
     const categoryLabel = doc.category.replace(/_/g, " ").toLowerCase();
-    const msg = `📄 New ${categoryLabel} uploaded for ${patientLabel}: "${doc.title}". Log in to Care Setu to review.`;
+    const deepLink = `${config.coordinatorAppUrl}/dashboard/patients/${doc.patientId}`;
+    // No patient name or document title in the message — PHI is behind auth.
+    const msg = `📄 New ${categoryLabel} uploaded. Log in to Care Setu to review:\n${deepLink}`;
 
     // Create a synthetic Alert row so the AlertDelivery records have a parent
     // to point to. This unifies report-upload notifications with the rest of
