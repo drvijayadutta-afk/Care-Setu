@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   FiSettings, FiUsers, FiUserPlus, FiHeart, FiBell, FiArrowRight,
-  FiCheckCircle, FiMessageCircle, FiActivity, FiClipboard,
+  FiCheckCircle, FiMessageCircle, FiActivity, FiClipboard, FiTrendingUp,
 } from 'react-icons/fi';
 import { useCoordinatorStore } from '@/lib/store';
 import { getPatients, Patient } from '@/lib/api';
@@ -97,6 +97,20 @@ export default function AdminPage() {
 
       {/* Action cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link
+          href="/dashboard/admin/outcomes"
+          className="group bg-white rounded-lg shadow p-5 hover:shadow-md transition-shadow border border-transparent hover:border-indigo-200"
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <FiTrendingUp className="text-indigo-600 mb-2" size={24} />
+              <h3 className="font-semibold text-gray-900 mb-1">Outcome Dashboard</h3>
+              <p className="text-sm text-gray-500">Aggregate clinical metrics — check-in trends, symptom burden, alert rates, MDT activity. CSV export for NABH reports.</p>
+            </div>
+            <FiArrowRight className="text-gray-400 group-hover:text-indigo-600" size={18} />
+          </div>
+        </Link>
+
         <Link
           href="/dashboard/patients/new"
           className="group bg-white rounded-lg shadow p-5 hover:shadow-md transition-shadow border border-transparent hover:border-indigo-200"

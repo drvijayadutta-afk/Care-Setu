@@ -13,6 +13,7 @@ import { registerActivityFeedRoutes } from "./routes/activity-feed";
 import { registerDoctorRoutes } from "./routes/doctors";
 import { registerReferralRoutes } from "./routes/referrals";
 import { registerAuditRoutes } from "./routes/audit";
+import { registerOutcomesRoutes } from "./routes/outcomes";
 
 export async function registerApiRoutes(fastify: FastifyInstance) {
   const auth = [(fastify as any).authenticate];
@@ -50,4 +51,5 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   registerDoctorRoutes(fastify);
   registerReferralRoutes(fastify);
   registerAuditRoutes(fastify);
+  registerOutcomesRoutes(fastify);
 }

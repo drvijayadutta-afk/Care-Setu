@@ -686,4 +686,34 @@ export const getActivityFeed = async (limit = 50, cursor?: string) => {
   return data as ActivityItem[];
 };
 
+// ─── Outcomes Dashboard ───────────────────────────────────────────────────────
+
+export interface OutcomesData {
+  periodDays: number;
+  patients: { total: number; active: number; checkinCompletion: number };
+  checkins: {
+    total: number;
+    avgScore: number | null;
+    lowScoreCount: number;
+    topSymptoms: { symptom: string; count: number }[];
+    scoreByDay: { date: string; avg: number }[];
+  };
+  alerts: {
+    total: number;
+    bySeverity: Record<string, number>;
+    resolvedCount: number;
+    avgResolutionHours: number | null;
+  };
+  meetings: { total: number; completed: number; decisionsRecorded: number; signOffRate: number };
+  documents: { uploaded: number };
+  medications: { logEntries: number };
+  cancerTypeBreakdown: { type: string; count: number }[];
+  protocolBreakdown: { protocol: string; count: number }[];
+}
+
+export const getOutcomes = async (days = 30): Promise<OutcomesData> => {
+  const { data } = await api.get(`/admin/outcomes?days=${days}`);
+  return data as OutcomesData;
+};
+
 export default api;

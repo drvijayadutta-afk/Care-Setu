@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useCoordinatorStore } from '@/lib/store';
 import Link from 'next/link';
-import { FiLogOut, FiUsers, FiHome, FiSettings, FiUserCheck, FiGitBranch, FiShield } from 'react-icons/fi';
+import { FiLogOut, FiUsers, FiHome, FiSettings, FiUserCheck, FiGitBranch, FiShield, FiTrendingUp } from 'react-icons/fi';
 import { ToastProvider } from '@/lib/toast';
 import { NotificationsBell } from '@/components/NotificationsBell';
 
@@ -96,6 +96,13 @@ export default function DashboardLayout({
               >
                 <FiSettings className="text-xl" />
                 Admin
+              </Link>
+              <Link
+                href="/dashboard/admin/outcomes"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
+              >
+                <FiTrendingUp className="text-xl" />
+                Outcomes
               </Link>
               <Link
                 href="/dashboard/admin/compliance"
