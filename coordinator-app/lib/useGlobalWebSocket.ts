@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { getWsTicket } from './api';
 
 export type ActivityKind = 'checkin' | 'alert' | 'document_uploaded' | 'outbound_message' | 'referral' | 'appointment';
 
@@ -19,16 +20,23 @@ export function useGlobalWebSocket(onEvent: (event: GlobalWSEvent) => void) {
     let pingInterval: ReturnType<typeof setInterval> | null = null;
     let unmounted = false;
 
-    function connect() {
+    async function connect() {
       if (unmounted) return;
 
-      const token = localStorage.getItem('coordinator_token');
-      if (!token) return;
+      let ticket: string;
+      try {
+        ticket = await getWsTicket();
+      } catch {
+        // Not authenticated yet — try again later
+        if (!unmounted) setTimeout(connect, 3000);
+        return;
+      }
+      if (unmounted) return;
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://care-setu-backend.onrender.com';
       const wsUrl = apiUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
 
-      ws = new WebSocket(`${wsUrl}/ws/global?token=${token}`);
+      ws = new WebSocket(`${wsUrl}/ws/global?token=${encodeURIComponent(ticket)}`);
 
       ws.onopen = () => {
         if (pingInterval) clearInterval(pingInterval);

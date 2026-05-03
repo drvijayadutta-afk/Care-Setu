@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useCoordinatorStore } from '@/lib/store';
+import { getMe } from '@/lib/api';
 import Link from 'next/link';
 import { FiLogOut, FiUsers, FiHome, FiSettings, FiUserCheck, FiGitBranch, FiShield, FiTrendingUp } from 'react-icons/fi';
 import { ToastProvider } from '@/lib/toast';
@@ -19,25 +20,24 @@ export default function DashboardLayout({
     setAuthenticated, setCoordinatorRole, setCoordinatorName, logout,
   } = useCoordinatorStore();
 
-  // Hydrate auth state from localStorage on mount — survives page reloads.
+  // Hydrate auth state by calling /auth/me — the HttpOnly cookie is sent
+  // automatically by the browser. Missing/expired cookie → 401 → redirect to login.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!isAuthenticated) {
-      const token = localStorage.getItem('coordinator_token');
-      if (token) {
-        const role = localStorage.getItem('coordinator_role') || 'COORDINATOR';
+    if (isAuthenticated) return;
+    let cancelled = false;
+    getMe()
+      .then((me) => {
+        if (cancelled) return;
         setAuthenticated(true);
-        setCoordinatorRole(role);
-        // Best-effort: name will be set on next login or stays blank
-        if (!coordinatorName) {
-          const cachedName = localStorage.getItem('coordinator_name');
-          if (cachedName) setCoordinatorName(cachedName);
-        }
-      } else {
-        router.push('/');
-      }
-    }
-  }, [isAuthenticated, router, setAuthenticated, setCoordinatorRole, setCoordinatorName, coordinatorName]);
+        setCoordinatorRole(me.role || 'COORDINATOR');
+        if (me.name) setCoordinatorName(me.name);
+      })
+      .catch(() => {
+        if (!cancelled) router.push('/');
+      });
+    return () => { cancelled = true; };
+  }, [isAuthenticated, router, setAuthenticated, setCoordinatorRole, setCoordinatorName]);
 
   const handleLogout = () => {
     logout();

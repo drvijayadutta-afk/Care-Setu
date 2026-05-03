@@ -44,10 +44,9 @@ export default function CompliancePage() {
   const [toDate, setToDate] = useState('');
   const [coordSearch, setCoordSearch] = useState('');
 
-  // Redirect non-admins
+  // Redirect non-admins. Role lives in the store (hydrated from /auth/me on layout mount).
   useEffect(() => {
-    const role = coordinatorRole || localStorage.getItem('coordinator_role');
-    if (role && role !== 'ADMIN') router.push('/dashboard');
+    if (coordinatorRole && coordinatorRole !== 'ADMIN') router.push('/dashboard');
   }, [coordinatorRole, router]);
 
   // Load summary on mount

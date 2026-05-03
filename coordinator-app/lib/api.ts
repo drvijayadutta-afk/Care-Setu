@@ -2,22 +2,14 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://care-setu-backend.onrender.com';
 
+// withCredentials sends the HttpOnly auth cookie with every request.
+// Authorization header is no longer used — JWT lives in the cookie.
 const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-});
-
-// Add token to requests
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('coordinator_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-  return config;
+  withCredentials: true,
 });
 
 export interface Patient {
@@ -263,11 +255,27 @@ export const healthCheck = async () => {
 
 // Auth
 export const login = async (email: string, password: string) => {
+  // Server sets the JWT as an HttpOnly cookie. Response no longer carries the token.
   const { data } = await api.post('/auth/login', { email, password });
   return data as {
-    token: string;
     coordinator: { id: string; email: string; name: string; role: string; hospitalName?: string };
   };
+};
+
+export const getMe = async () => {
+  const { data } = await api.get('/auth/me');
+  return data as {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    hospitalName?: string;
+  };
+};
+
+export const getWsTicket = async () => {
+  const { data } = await api.post('/auth/ws-ticket', {});
+  return (data as { token: string }).token;
 };
 
 // ─── Lab Results ──────────────────────────────────────────────────────────────

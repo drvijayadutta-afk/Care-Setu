@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import jwt from "@fastify/jwt";
+import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import {
   handleWebhookVerification,
@@ -107,8 +108,16 @@ async function start() {
       timeWindow: 15 * 60 * 1000, // 15 minutes
     });
 
-    // JWT authentication — secret validated at boot in src/config/env.ts
-    await fastify.register(jwt, { secret: config.jwtSecret });
+    // Cookie support for HttpOnly JWT cookies
+    await fastify.register(cookie);
+
+    // JWT authentication — secret validated at boot in src/config/env.ts.
+    // The cookie config tells @fastify/jwt to read the token from the cookie
+    // named `coordinator_token` when no Authorization header is present.
+    await fastify.register(jwt, {
+      secret: config.jwtSecret,
+      cookie: { cookieName: "coordinator_token", signed: false },
+    });
 
     // Decorator used by protected routes
     fastify.decorate("authenticate", async (request: any, reply: any) => {

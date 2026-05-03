@@ -19,10 +19,8 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const { token, coordinator } = await login(email, password);
-      localStorage.setItem('coordinator_token', token);
-      localStorage.setItem('coordinator_role', coordinator.role || 'COORDINATOR');
-      localStorage.setItem('coordinator_name', coordinator.name || '');
+      // Server now sets the JWT as an HttpOnly cookie. Nothing is stored in JS.
+      const { coordinator } = await login(email, password);
       setAuthenticated(true);
       setCoordinatorName(coordinator.name);
       setCoordinatorRole(coordinator.role || 'COORDINATOR');

@@ -3,6 +3,42 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../db/client";
 import { config } from "../config/env";
 
+// Convert "8h", "30m", "7d" strings to seconds for cookie Max-Age.
+// Mirrors @fastify/jwt's expiresIn parsing for the cookie counterpart.
+function ttlToSeconds(ttl: string): number {
+  const m = /^(\d+)([smhd])$/.exec(ttl);
+  if (!m) return 8 * 60 * 60; // default 8h
+  const n = parseInt(m[1], 10);
+  switch (m[2]) {
+    case "s": return n;
+    case "m": return n * 60;
+    case "h": return n * 60 * 60;
+    case "d": return n * 24 * 60 * 60;
+    default: return 8 * 60 * 60;
+  }
+}
+
+const COOKIE_NAME = "coordinator_token";
+
+function setAuthCookie(reply: any, token: string) {
+  reply.setCookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: config.nodeEnv === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: ttlToSeconds(config.jwtTtl),
+  });
+}
+
+function clearAuthCookie(reply: any) {
+  reply.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    secure: config.nodeEnv === "production",
+    sameSite: "strict",
+    path: "/",
+  });
+}
+
 export async function registerAuthRoutes(fastify: FastifyInstance) {
   // POST /auth/login — rate limited to configured attempts per 15 minutes (default 5, keyed by IP)
   fastify.post<{ Body: { email?: string; password?: string } }>(
@@ -51,8 +87,11 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         { expiresIn: config.jwtTtl }
       );
 
+      // Set the JWT as an HttpOnly cookie so it cannot be read by JS (XSS defense).
+      setAuthCookie(reply, token);
+
+      // Token no longer returned in body — frontend must rely on the cookie.
       return {
-        token,
         coordinator: {
           id: coordinator.id,
           email: coordinator.email,
@@ -63,6 +102,12 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
       };
     }
   );
+
+  // POST /auth/logout — clears the HttpOnly auth cookie. Idempotent.
+  fastify.post("/auth/logout", async (_request, reply) => {
+    clearAuthCookie(reply);
+    return { ok: true };
+  });
 
   // GET /auth/me — verify token + return coordinator info
   fastify.get("/auth/me", {
@@ -76,5 +121,26 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
       role: user.role,
       hospitalName: user.hospitalName,
     };
+  });
+
+  // POST /auth/ws-ticket — issues a short-lived (60s) JWT for WebSocket connections.
+  // Browsers don't send cookies with cross-origin WebSocket handshakes, so the
+  // frontend must fetch this ticket (via the auth cookie) and pass it as ?token=
+  // on the ws:// URL.
+  fastify.post("/auth/ws-ticket", {
+    preHandler: [(fastify as any).authenticate],
+  }, async (request) => {
+    const user = (request as any).user;
+    const token = (fastify as any).jwt.sign(
+      {
+        sub: user.sub,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        hospitalName: user.hospitalName,
+      },
+      { expiresIn: "60s" }
+    );
+    return { token };
   });
 }
