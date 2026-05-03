@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type WebSocketEvent =
   | { type: 'message'; patientId: string; conversationId: string; content: string; role: 'patient' | 'assistant' }
@@ -11,64 +11,73 @@ export function useWebSocket(patientId: string | null, onEvent: (event: WebSocke
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const connect = useCallback(() => {
+  // Keep onEvent in a ref so it never needs to be a useEffect dependency.
+  // This prevents a new WebSocket being created on every render when the
+  // caller passes an inline callback.
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
+
+  useEffect(() => {
     if (!patientId) return;
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('coordinator_token') : null;
     if (!token) return;
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-    const wsUrl = apiUrl.replace(/^https?:/, 'ws:').replace(/^http?:/, 'ws:');
+    // Use wss:// for https backends, ws:// for http (local dev)
+    const wsUrl = apiUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
     const wsEndpoint = `${wsUrl}/ws/${patientId}?token=${encodeURIComponent(token)}`;
 
-    console.log('Connecting to WebSocket:', wsEndpoint);
+    let ws: WebSocket;
+    let pingInterval: ReturnType<typeof setInterval>;
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
+    let unmounted = false;
 
-    const ws = new WebSocket(wsEndpoint);
-    let pingInterval: ReturnType<typeof setInterval> | null = null;
+    function connect() {
+      ws = new WebSocket(wsEndpoint);
 
-    ws.onopen = () => {
-      setIsConnected(true);
-      setError(null);
+      ws.onopen = () => {
+        setIsConnected(true);
+        setError(null);
+        pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() }));
+          }
+        }, 30000);
+      };
 
-      pingInterval = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() }));
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data) as WebSocketEvent;
+          onEventRef.current(data);
+        } catch (err) {
+          console.error('Error parsing WebSocket message:', err);
         }
-      }, 30000);
-    };
+      };
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as WebSocketEvent;
-        onEvent(data);
-      } catch (err) {
-        console.error('Error parsing WebSocket message:', err);
-      }
-    };
+      ws.onerror = () => {
+        setError('WebSocket connection error');
+        setIsConnected(false);
+      };
 
-    ws.onerror = () => {
-      setError('WebSocket connection error');
-      setIsConnected(false);
-    };
+      ws.onclose = () => {
+        clearInterval(pingInterval);
+        setIsConnected(false);
+        if (!unmounted) {
+          reconnectTimeout = setTimeout(connect, 3000);
+        }
+      };
+    }
 
-    ws.onclose = () => {
-      if (pingInterval) clearInterval(pingInterval);
-      setIsConnected(false);
-
-      // Reconnect after 3 seconds if still mounted
-      setTimeout(() => connect(), 3000);
-    };
+    connect();
 
     return () => {
-      if (pingInterval) clearInterval(pingInterval);
-      ws.close();
+      unmounted = true;
+      clearInterval(pingInterval);
+      clearTimeout(reconnectTimeout);
+      ws?.close();
     };
-  }, [patientId, onEvent]);
-
-  useEffect(() => {
-    const cleanup = connect();
-    return cleanup;
-  }, [connect]);
+  }, [patientId]); // only patientId — onEvent is stable via ref
 
   return { isConnected, error };
 }
