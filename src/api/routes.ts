@@ -8,6 +8,7 @@ import { registerPatientRoutes } from "./routes/patients";
 import { registerRecordRoutes } from "./routes/records";
 import { registerAppointmentRoutes } from "./routes/appointments";
 import { registerMessageRoutes } from "./routes/messages";
+import { registerTumorBoardRoutes } from "./routes/tumor-board";
 
 export async function registerApiRoutes(fastify: FastifyInstance) {
   const auth = [(fastify as any).authenticate];
@@ -40,4 +41,5 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   registerRecordRoutes(fastify, recordRepo, aiPort, storagePort);
   registerAppointmentRoutes(fastify, recordRepo);
   registerMessageRoutes(fastify, patientRepo, conversationRepo);
+  registerTumorBoardRoutes(fastify, aiPort);
 }

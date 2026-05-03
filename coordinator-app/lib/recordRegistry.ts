@@ -1,13 +1,13 @@
 import React from 'react';
 import {
   FiActivity, FiMessageCircle, FiCheckCircle, FiCalendar, FiBarChart2,
-  FiImage, FiFileText, FiUpload, FiUsers,
+  FiImage, FiFileText, FiUpload, FiUsers, FiClipboard,
 } from 'react-icons/fi';
 
 /* Record Type Registry — drives tabs, forms, API integration, and data loading */
 
 export type RecordTabId = 'overview' | 'conversations' | 'checkins' | 'appointments' |
-                          'labs' | 'imaging' | 'pathology' | 'vitals' | 'notes' | 'documents' | 'care-team';
+                          'labs' | 'imaging' | 'pathology' | 'vitals' | 'notes' | 'documents' | 'care-team' | 'tumor-board';
 
 export interface TabConfig {
   id: RecordTabId;
@@ -81,6 +81,12 @@ export const RECORD_REGISTRY: Record<RecordTabId, TabConfig> = {
     id: 'care-team',
     label: 'Care Team',
     iconType: FiUsers,
+    section: 'interactions',
+  },
+  'tumor-board': {
+    id: 'tumor-board',
+    label: 'Tumor Board',
+    iconType: FiClipboard,
     section: 'interactions',
   },
 };

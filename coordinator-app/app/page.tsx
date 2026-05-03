@@ -7,7 +7,7 @@ import { login } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setAuthenticated, setCoordinatorName } = useCoordinatorStore();
+  const { setAuthenticated, setCoordinatorName, setCoordinatorRole } = useCoordinatorStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,8 +21,11 @@ export default function LoginPage() {
     try {
       const { token, coordinator } = await login(email, password);
       localStorage.setItem('coordinator_token', token);
+      localStorage.setItem('coordinator_role', coordinator.role || 'COORDINATOR');
+      localStorage.setItem('coordinator_name', coordinator.name || '');
       setAuthenticated(true);
       setCoordinatorName(coordinator.name);
+      setCoordinatorRole(coordinator.role || 'COORDINATOR');
       router.push('/dashboard');
     } catch {
       setError('Invalid email or password');

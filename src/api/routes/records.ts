@@ -5,6 +5,7 @@ import type { StoragePort } from "../../ports/storage";
 import { deleteFile } from "../../integrations/supabase-storage";
 import { extractDocument } from "../services/extract-document.service";
 import { approveExtractionDraft, rejectExtractionDraft } from "../services/approve-extraction-draft.service";
+import { notifyReportUploaded } from "../services/notify-report-upload.service";
 import { prisma } from "../../db/client";
 
 export function registerRecordRoutes(
@@ -287,7 +288,7 @@ export function registerRecordRoutes(
   fastify.patch("/documents/:id", { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = request.body as any;
-    return await recordRepo.documents.update(id, {
+    const result = await recordRepo.documents.update(id, {
       ...(body.title !== undefined && { title: body.title }),
       ...(body.description !== undefined && { description: body.description }),
       ...(body.documentDate !== undefined && { documentDate: new Date(body.documentDate) }),
@@ -296,6 +297,13 @@ export function registerRecordRoutes(
       ...(body.tags !== undefined && { tags: body.tags }),
       ...(body.uploadedBy !== undefined && { uploadedBy: body.uploadedBy }),
     });
+    // Fire-and-forget: notify care team only when the upload is being confirmed
+    // (i.e., fileSizeBytes is set on this PATCH — the convention used by the
+    // frontend to signal "upload complete").
+    if (body.fileSizeBytes !== undefined) {
+      void notifyReportUploaded(id);
+    }
+    return result;
   });
 
   fastify.get("/documents/:id/download-url", { preHandler: auth }, async (request, reply) => {

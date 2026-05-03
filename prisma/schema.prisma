@@ -59,6 +59,7 @@ model Patient {
   documents         PatientDocument[]
   careTeamMembers   CareTeamMember[]
   extractedDrafts   ExtractedRecordDraft[]
+  tumorBoardMeetings TumorBoardMeeting[]
 }
 
 model Caregiver {
@@ -169,8 +170,9 @@ model Alert {
   resolvedAt           DateTime?
   createdAt            DateTime  @default(now())
 
-  patient Patient  @relation(fields: [patientId], references: [id])
-  checkin Checkin? @relation(fields: [checkinId], references: [id])
+  patient    Patient         @relation(fields: [patientId], references: [id])
+  checkin    Checkin?        @relation(fields: [checkinId], references: [id])
+  deliveries AlertDelivery[]
 }
 
 model Conversation {
@@ -396,4 +398,56 @@ model ExtractedRecordDraft {
   createdAt     DateTime  @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id])
+}
+
+// ─── Tumor Board / MDT Models ────────────────────────────────────────────────
+
+model TumorBoardMeeting {
+  id               String   @id @default(uuid())
+  patientId        String
+  title            String
+  scheduledAt      DateTime
+  status           String   @default("scheduled") // scheduled | in-progress | completed | cancelled
+  mode             String   @default("sync")       // sync | async
+  agenda           String?
+  briefText        String?  // AI MDT brief snapshot at meeting time
+  decision         Json?    // { treatment, protocol, nextReview, notes, linkedTrialIds }
+  consensusReached Boolean  @default(false)
+  meetingNotes     String?
+  createdBy        String   // Coordinator.id
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  patient      Patient                 @relation(fields: [patientId], references: [id])
+  participants TumorBoardParticipant[]
+}
+
+model TumorBoardParticipant {
+  id               String    @id @default(uuid())
+  meetingId        String
+  name             String
+  role             String    // care team role label
+  email            String?
+  phone            String?
+  attendanceStatus String    @default("invited") // invited | attended | declined
+  comments         String?
+  signedOff        Boolean   @default(false)
+  signedOffAt      DateTime?
+  createdAt        DateTime  @default(now())
+
+  meeting TumorBoardMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model AlertDelivery {
+  id           String    @id @default(uuid())
+  alertId      String
+  channel      String    // whatsapp | telegram | email | in-app
+  recipientRef String    // phone number or email
+  status       String    @default("pending") // pending | sent | failed | delivered
+  sentAt       DateTime?
+  retryCount   Int       @default(0)
+  lastError    String?
+  createdAt    DateTime  @default(now())
+
+  alert Alert @relation(fields: [alertId], references: [id])
 }

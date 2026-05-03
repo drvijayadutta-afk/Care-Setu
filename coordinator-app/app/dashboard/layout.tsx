@@ -4,8 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useCoordinatorStore } from '@/lib/store';
 import Link from 'next/link';
-import { FiLogOut, FiUsers, FiHome } from 'react-icons/fi';
+import { FiLogOut, FiUsers, FiHome, FiSettings } from 'react-icons/fi';
 import { ToastProvider } from '@/lib/toast';
+import { NotificationsBell } from '@/components/NotificationsBell';
 
 export default function DashboardLayout({
   children,
@@ -13,13 +14,30 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isAuthenticated, coordinatorName, logout } = useCoordinatorStore();
+  const {
+    isAuthenticated, coordinatorName, coordinatorRole,
+    setAuthenticated, setCoordinatorRole, setCoordinatorName, logout,
+  } = useCoordinatorStore();
 
+  // Hydrate auth state from localStorage on mount — survives page reloads.
   useEffect(() => {
-    if (!isAuthenticated && typeof window !== 'undefined') {
-      router.push('/');
+    if (typeof window === 'undefined') return;
+    if (!isAuthenticated) {
+      const token = localStorage.getItem('coordinator_token');
+      if (token) {
+        const role = localStorage.getItem('coordinator_role') || 'COORDINATOR';
+        setAuthenticated(true);
+        setCoordinatorRole(role);
+        // Best-effort: name will be set on next login or stays blank
+        if (!coordinatorName) {
+          const cachedName = localStorage.getItem('coordinator_name');
+          if (cachedName) setCoordinatorName(cachedName);
+        }
+      } else {
+        router.push('/');
+      }
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, setAuthenticated, setCoordinatorRole, setCoordinatorName, coordinatorName]);
 
   const handleLogout = () => {
     logout();
@@ -30,10 +48,12 @@ export default function DashboardLayout({
     return null;
   }
 
+  const isAdmin = coordinatorRole === 'ADMIN';
+
   return (
     <div className="flex min-h-screen bg-gray-100">
       {/* Sidebar */}
-      <aside className="w-64 bg-indigo-900 text-white">
+      <aside className="w-64 bg-indigo-900 text-white relative">
         <div className="p-6">
           <h1 className="text-2xl font-bold">Care Setu</h1>
           <p className="mt-2 text-indigo-200">Coordinator Dashboard</p>
@@ -54,11 +74,23 @@ export default function DashboardLayout({
             <FiUsers className="text-xl" />
             Patients
           </Link>
+          {isAdmin && (
+            <Link
+              href="/dashboard/admin"
+              className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
+            >
+              <FiSettings className="text-xl" />
+              Admin
+            </Link>
+          )}
         </nav>
 
         <div className="absolute bottom-0 w-64 border-t border-indigo-800 p-4">
-          <div className="mb-4 text-sm text-indigo-200">
-            {coordinatorName}
+          <div className="mb-1 text-sm text-indigo-200">
+            {coordinatorName || 'Coordinator'}
+          </div>
+          <div className="mb-3 text-xs text-indigo-300">
+            {isAdmin ? 'Hospital Admin' : 'Care Coordinator'}
           </div>
           <button
             onClick={handleLogout}
@@ -72,6 +104,10 @@ export default function DashboardLayout({
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
+        {/* Top bar with notifications bell */}
+        <div className="sticky top-0 z-10 flex items-center justify-end gap-3 border-b border-gray-200 bg-white px-6 py-3">
+          <NotificationsBell />
+        </div>
         <div className="p-8">{children}</div>
       </main>
 

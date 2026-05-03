@@ -4,12 +4,13 @@ import { useEffect, useState, useMemo } from 'react';
 import { getPatients, Patient, healthCheck } from '@/lib/api';
 import { useCoordinatorStore } from '@/lib/store';
 import Link from 'next/link';
-import { FiAlertCircle, FiCheckCircle, FiClock, FiSearch } from 'react-icons/fi';
+import { FiAlertCircle, FiCheckCircle, FiClock, FiSearch, FiUserPlus } from 'react-icons/fi';
 
 type FilterMode = 'all' | 'onboarded' | 'in-progress';
 
 export default function DashboardPage() {
-  const { setPatients } = useCoordinatorStore();
+  const { setPatients, coordinatorRole } = useCoordinatorStore();
+  const isAdmin = coordinatorRole === 'ADMIN';
   const [allPatients, setAllPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [serverOnline, setServerOnline] = useState(false);
@@ -77,7 +78,17 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h1 className="mb-8 text-3xl font-bold text-gray-900">Dashboard</h1>
+      <div className="mb-8 flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        {isAdmin && (
+          <Link
+            href="/dashboard/patients/new"
+            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            <FiUserPlus size={16} /> Add Patient
+          </Link>
+        )}
+      </div>
 
       {/* Stats */}
       <div className="mb-8 grid grid-cols-3 gap-4">

@@ -401,4 +401,108 @@ export const getMdtSummary = async (patientId: string) => {
   return data as { summary: string };
 };
 
+// ─── Tumor Board / MDT Meetings ───────────────────────────────────────────────
+
+export interface TumorBoardParticipant {
+  id: string;
+  meetingId: string;
+  name: string;
+  role: string;
+  email?: string | null;
+  phone?: string | null;
+  attendanceStatus: 'invited' | 'attended' | 'declined';
+  comments?: string | null;
+  signedOff: boolean;
+  signedOffAt?: string | null;
+  createdAt: string;
+}
+
+export interface TumorBoardMeeting {
+  id: string;
+  patientId: string;
+  title: string;
+  scheduledAt: string;
+  status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
+  mode: 'sync' | 'async';
+  agenda?: string | null;
+  briefText?: string | null;
+  decision?: { treatment?: string; protocol?: string; nextReview?: string; notes?: string } | null;
+  consensusReached: boolean;
+  meetingNotes?: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  participants: TumorBoardParticipant[];
+}
+
+export const getTumorBoardMeetings = async (patientId: string) => {
+  const { data } = await api.get(`/patients/${patientId}/tumor-board-meetings`);
+  return data as TumorBoardMeeting[];
+};
+
+export const createTumorBoardMeeting = async (
+  patientId: string,
+  body: { title: string; scheduledAt: string; mode?: string; agenda?: string }
+) => {
+  const { data } = await api.post(`/patients/${patientId}/tumor-board-meetings`, body);
+  return data as TumorBoardMeeting;
+};
+
+export const updateTumorBoardMeeting = async (
+  meetingId: string,
+  body: Partial<{
+    title: string;
+    status: string;
+    mode: string;
+    agenda: string;
+    decision: any;
+    consensusReached: boolean;
+    meetingNotes: string;
+    scheduledAt: string;
+  }>
+) => {
+  const { data } = await api.patch(`/tumor-board-meetings/${meetingId}`, body);
+  return data as TumorBoardMeeting;
+};
+
+export const cancelTumorBoardMeeting = async (meetingId: string) => {
+  await api.delete(`/tumor-board-meetings/${meetingId}`);
+};
+
+export const signOffParticipant = async (
+  meetingId: string,
+  participantId: string,
+  signedOff: boolean,
+  comments?: string
+) => {
+  const { data } = await api.patch(
+    `/tumor-board-meetings/${meetingId}/participants/${participantId}/sign-off`,
+    { signedOff, comments }
+  );
+  return data as TumorBoardParticipant;
+};
+
+export const generateMeetingBrief = async (meetingId: string) => {
+  const { data } = await api.post(`/tumor-board-meetings/${meetingId}/brief`);
+  return data as { briefText: string };
+};
+
+// ─── Admin: Manual Patient Creation ───────────────────────────────────────────
+
+export const createPatient = async (body: {
+  name: string;
+  whatsappNumber?: string;
+  cancerType: string;
+  treatmentProtocol?: string;
+  stage?: string;
+  hospitalName: string;
+  doctorName?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  assignedCoordinatorId?: string;
+}) => {
+  const { data } = await api.post('/admin/patients', body);
+  return data as Patient;
+};
+
 export default api;

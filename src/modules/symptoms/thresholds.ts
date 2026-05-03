@@ -1,5 +1,6 @@
 import { prisma } from "../../db/client";
 import { messagingRouter } from "../../messaging/router";
+import { dispatchAlert } from "../../api/services/alert-dispatcher.service";
 import type { Patient, Checkin } from "@prisma/client";
 
 interface ThresholdRule {
@@ -235,6 +236,9 @@ export async function evaluateThresholds(
         message: rule.description,
       },
     });
+
+    // Dispatch via WebSocket + WhatsApp to care team (fire-and-forget)
+    void dispatchAlert(alert.id);
 
     // Send message to patient (replace placeholders)
     const patientMsg = rule

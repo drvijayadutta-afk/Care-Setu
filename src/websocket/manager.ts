@@ -4,7 +4,10 @@ export type WSEvent =
   | { type: 'message'; patientId: string; conversationId: string; content: string; role: 'patient' | 'assistant' }
   | { type: 'appointment'; patientId: string; appointmentId: string; action: 'created' | 'updated'; status: string }
   | { type: 'checkin'; patientId: string; checkinId: string; symptomScore: number }
-  | { type: 'patient_status'; patientId: string; status: 'online' | 'offline'; lastSeen: string };
+  | { type: 'patient_status'; patientId: string; status: 'online' | 'offline'; lastSeen: string }
+  | { type: 'alert'; patientId: string; alertId: string; severity: string; message: string; alertType: string }
+  | { type: 'document_uploaded'; patientId: string; documentId: string; category: string; title: string }
+  | { type: 'tumor-board'; patientId: string; meetingId: string; action: 'created' | 'updated' | 'signed-off'; title: string };
 
 class WebSocketManager {
   private connections: Map<string, Set<WebSocket>> = new Map();

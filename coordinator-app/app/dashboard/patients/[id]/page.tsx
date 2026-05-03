@@ -4,18 +4,19 @@ import { useEffect, useState, createElement, useCallback } from 'react';
 import {
   getPatient, getPatientConversations, getPatientCheckins, getPatientAppointments,
   getPatientLabResults, getPatientImaging, getPatientPathology, getPatientVitals,
-  getPatientClinicalNotes, getPatientDocuments, getCareTeam,
+  getPatientClinicalNotes, getPatientDocuments, getCareTeam, getTumorBoardMeetings,
   Patient, Conversation, Checkin, Appointment, LabResult, ImagingReport,
-  PathologyReport, VitalSign, ClinicalNote, PatientDocument, CareTeamMember,
+  PathologyReport, VitalSign, ClinicalNote, PatientDocument, CareTeamMember, TumorBoardMeeting,
 } from '@/lib/api';
 import { useWebSocket } from '@/lib/useWebSocket';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { FiArrowLeft, FiWifi, FiWifiOff } from 'react-icons/fi';
+import { pushNotification } from '@/components/NotificationsBell';
 import { TABS, RECORD_REGISTRY, RecordTabId } from '@/lib/recordRegistry';
 import {
   OverviewTab, ConversationsTab, CheckinsTab, AppointmentsTab, LabsTab,
-  ImagingTab, PathologyTab, VitalsTab, NotesTab, DocumentsTab, CareTeamTab
+  ImagingTab, PathologyTab, VitalsTab, NotesTab, DocumentsTab, CareTeamTab, TumorBoardTab
 } from './_tabs';
 
 const TAB_COMPONENTS: Record<RecordTabId, React.ComponentType<any>> = {
@@ -30,6 +31,7 @@ const TAB_COMPONENTS: Record<RecordTabId, React.ComponentType<any>> = {
   notes: NotesTab,
   documents: DocumentsTab,
   'care-team': CareTeamTab,
+  'tumor-board': TumorBoardTab,
 };
 
 // Which tabs are critical (loaded immediately) vs deferred (loaded on first click)
@@ -50,6 +52,7 @@ export default function PatientDetailPage() {
   const [notes, setNotes] = useState<ClinicalNote[]>([]);
   const [documents, setDocuments] = useState<PatientDocument[]>([]);
   const [careTeam, setCareTeam] = useState<CareTeamMember[]>([]);
+  const [tumorBoardMeetings, setTumorBoardMeetings] = useState<TumorBoardMeeting[]>([]);
 
   // Two-phase loading: critical = patient header + overview data; secondary = rest
   const [loadingCritical, setLoadingCritical] = useState(true);
@@ -93,8 +96,19 @@ export default function PatientDetailPage() {
       else if (tab === 'pathology') { const d = await getPatientPathology(patientId); setPathology(d); }
       else if (tab === 'notes') { const d = await getPatientClinicalNotes(patientId); setNotes(d); }
       else if (tab === 'documents') { const d = await getPatientDocuments(patientId); setDocuments(d); }
+      else if (tab === 'tumor-board') {
+        // Load meetings + ensure imaging/pathology are loaded for the context panel
+        const [tb, img, path] = await Promise.all([
+          getTumorBoardMeetings(patientId),
+          loadedTabs.has('imaging') ? Promise.resolve(imaging) : getPatientImaging(patientId),
+          loadedTabs.has('pathology') ? Promise.resolve(pathology) : getPatientPathology(patientId),
+        ]);
+        setTumorBoardMeetings(tb);
+        if (!loadedTabs.has('imaging')) setImaging(img);
+        if (!loadedTabs.has('pathology')) setPathology(path);
+      }
     } catch (e) { console.error(e); }
-  }, [patientId, loadedTabs]);
+  }, [patientId, loadedTabs, imaging, pathology]);
 
   const handleTabChange = (tab: RecordTabId) => {
     setActiveTab(tab);
@@ -108,6 +122,33 @@ export default function PatientDetailPage() {
       setAppointments(await getPatientAppointments(patientId));
     else if (event.type === 'checkin' && event.patientId === patientId)
       setCheckins(await getPatientCheckins(patientId));
+    else if (event.type === 'alert' && event.patientId === patientId) {
+      pushNotification({
+        type: 'alert',
+        patientId,
+        message: `${event.severity?.toUpperCase() || 'ALERT'}: ${event.message}`,
+        severity: event.severity,
+      });
+    }
+    else if (event.type === 'document_uploaded' && event.patientId === patientId) {
+      pushNotification({
+        type: 'document_uploaded',
+        patientId,
+        message: `New ${event.category?.toLowerCase().replace(/_/g, ' ')} uploaded: ${event.title}`,
+      });
+    }
+    else if (event.type === 'tumor-board' && event.patientId === patientId) {
+      pushNotification({
+        type: 'tumor-board',
+        patientId,
+        message: `Tumor board ${event.action}: ${event.title}`,
+      });
+      // Refresh tumor board meetings if currently loaded
+      if (loadedTabs.has('tumor-board')) {
+        const meetings = await getTumorBoardMeetings(patientId);
+        setTumorBoardMeetings(meetings);
+      }
+    }
   });
 
   const TabComponent = TAB_COMPONENTS[activeTab];
@@ -218,6 +259,20 @@ export default function PatientDetailPage() {
               )}
               {activeTab === 'care-team' && (
                 <CareTeamTab patientId={patientId} careTeam={careTeam} onCareTeamUpdate={setCareTeam} />
+              )}
+              {activeTab === 'tumor-board' && (
+                !loadedTabs.has('tumor-board')
+                  ? <div className="text-center text-gray-500 py-12">Loading…</div>
+                  : <TumorBoardTab
+                      patientId={patientId}
+                      meetings={tumorBoardMeetings}
+                      checkins={checkins}
+                      conversations={conversations}
+                      labResults={labResults}
+                      imaging={imaging}
+                      pathology={pathology}
+                      onMeetingsUpdate={setTumorBoardMeetings}
+                    />
               )}
             </div>
           </div>

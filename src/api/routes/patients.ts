@@ -23,6 +23,57 @@ export function registerPatientRoutes(
     return await patientRepo.findMany({ coordinatorId: user.sub });
   });
 
+  // Manual patient creation — ADMIN only. Used for clinic walk-ins, referrals,
+  // and patients without smartphones who can't onboard via WhatsApp.
+  fastify.post("/admin/patients", { preHandler: auth }, async (request, reply) => {
+    const user = (request as any).user as { sub: string; role: string };
+    if (user.role !== "ADMIN") {
+      return reply.status(403).send({ error: "ADMIN role required" });
+    }
+
+    const body = request.body as {
+      name: string;
+      whatsappNumber?: string;
+      cancerType: string;
+      treatmentProtocol?: string;
+      stage?: string;
+      hospitalName: string;
+      doctorName?: string;
+      gender?: string;
+      dateOfBirth?: string;
+      assignedCoordinatorId?: string;
+    };
+
+    if (!body.name || !body.cancerType || !body.hospitalName) {
+      return reply.status(400).send({
+        error: "name, cancerType, and hospitalName are required",
+      });
+    }
+
+    // Generate a placeholder unique number for patients without WhatsApp;
+    // they can be linked later when they message in.
+    const whatsappNumber = body.whatsappNumber?.trim()
+      || `manual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const patient = await patientRepo.create({
+      whatsappNumber,
+      name: body.name,
+      cancerType: body.cancerType,
+      treatmentProtocol: body.treatmentProtocol || "Manual",
+      cycleStartDate: new Date(),
+      hospitalName: body.hospitalName,
+      doctorName: body.doctorName || "TBD",
+      stage: body.stage || null,
+      gender: body.gender || null,
+      dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : null,
+      assignedCoordinatorId: body.assignedCoordinatorId || user.sub,
+      onboardingStep: 9, // Skip chat onboarding — admin filled this in
+      isActive: true,
+    });
+
+    return reply.status(201).send(patient);
+  });
+
   fastify.get("/patients/:id", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const patient = await patientRepo.findUnique(id);

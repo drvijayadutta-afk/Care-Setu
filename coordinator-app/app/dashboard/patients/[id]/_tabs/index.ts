@@ -9,3 +9,4 @@ export { VitalsTab } from './Vitals';
 export { NotesTab } from './Notes';
 export { DocumentsTab } from './Documents';
 export { CareTeamTab } from './CareTeam';
+export { TumorBoardTab } from './TumorBoard';
