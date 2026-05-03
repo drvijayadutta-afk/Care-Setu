@@ -37,7 +37,26 @@ export async function dispatchAlert(alertId: string): Promise<void> {
       alertType: alert.type,
     });
 
-    // 2. WhatsApp dispatch — only for HIGH/CRITICAL severities
+    // 2. Global dashboard broadcast — alert badge on patient row + activity feed entry
+    const ts = new Date().toISOString();
+    wsManager.broadcastGlobal({
+      type: "alert_badge",
+      patientId: alert.patientId,
+      severity: alert.severity,
+      alertType: alert.type,
+      timestamp: ts,
+    });
+    wsManager.broadcastGlobal({
+      type: "activity",
+      patientId: alert.patientId,
+      patientName: alert.patient.name ?? "Patient",
+      eventKind: "alert",
+      summary: alert.message,
+      severity: alert.severity,
+      timestamp: ts,
+    });
+
+    // 3. WhatsApp dispatch — only for HIGH/CRITICAL severities
     if (alert.severity !== "high" && alert.severity !== "critical") return;
 
     const primary = alert.patient.careTeamMembers.find(m => m.isPrimary)

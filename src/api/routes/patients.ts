@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { IPatientRepository, IConversationRepository, IRecordRepository } from "../../repositories/types";
 import type { AiPort } from "../../ports/ai";
 import { getMdtSummary } from "../services/mdt-summary.service";
+import { prisma } from "../../db/client";
 
 export function registerPatientRoutes(
   fastify: FastifyInstance,
@@ -108,6 +109,20 @@ export function registerPatientRoutes(
       onboardingStep: step,
       isComplete: hasWhatsApp && hasTelegram && hasPreferredChannel && step >= 9,
     };
+  });
+
+  fastify.get("/patients/:id/outbound-messages", { preHandler: authScope }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const query = request.query as { limit?: string; cursor?: string; messageType?: string };
+    const limit = Math.min(Number(query.limit ?? 50), 100);
+    const where: any = { patientId: id };
+    if (query.messageType) where.messageType = query.messageType;
+    if (query.cursor) where.sentAt = { lt: new Date(query.cursor) };
+    return await prisma.outboundMessage.findMany({
+      where,
+      orderBy: { sentAt: "desc" },
+      take: limit,
+    });
   });
 
   fastify.get("/patients/:id/mdt-summary", { preHandler: authScope }, async (request, reply) => {

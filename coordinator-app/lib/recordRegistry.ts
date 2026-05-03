@@ -1,13 +1,14 @@
 import React from 'react';
 import {
   FiActivity, FiMessageCircle, FiCheckCircle, FiCalendar, FiBarChart2,
-  FiImage, FiFileText, FiUpload, FiUsers, FiClipboard,
+  FiImage, FiFileText, FiUpload, FiUsers, FiClipboard, FiSend, FiGitBranch,
 } from 'react-icons/fi';
 
 /* Record Type Registry — drives tabs, forms, API integration, and data loading */
 
 export type RecordTabId = 'overview' | 'conversations' | 'checkins' | 'appointments' |
-                          'labs' | 'imaging' | 'pathology' | 'vitals' | 'notes' | 'documents' | 'care-team' | 'tumor-board';
+                          'labs' | 'imaging' | 'pathology' | 'vitals' | 'notes' | 'documents' |
+                          'care-team' | 'tumor-board' | 'outbound-messages' | 'referrals';
 
 export interface TabConfig {
   id: RecordTabId;
@@ -87,6 +88,18 @@ export const RECORD_REGISTRY: Record<RecordTabId, TabConfig> = {
     id: 'tumor-board',
     label: 'Tumor Board',
     iconType: FiClipboard,
+    section: 'interactions',
+  },
+  'outbound-messages': {
+    id: 'outbound-messages',
+    label: 'Sent Messages',
+    iconType: FiSend,
+    section: 'interactions',
+  },
+  'referrals': {
+    id: 'referrals',
+    label: 'Referrals',
+    iconType: FiGitBranch,
     section: 'interactions',
   },
 };
