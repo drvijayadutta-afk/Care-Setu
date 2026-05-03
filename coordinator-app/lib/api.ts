@@ -185,9 +185,12 @@ export interface Conversation {
 export interface Checkin {
   id: string;
   patientId: string;
-  symptomScore: number;
-  medications: string;
-  notes: string;
+  score: number;
+  symptoms: string[];
+  emotionalState?: string | null;
+  notes?: string | null;
+  cycleDay: number;
+  ecogScore?: number | null;
   createdAt: string;
 }
 
