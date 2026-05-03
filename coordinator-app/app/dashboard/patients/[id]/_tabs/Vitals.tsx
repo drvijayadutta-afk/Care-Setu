@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { FiPlus, FiHelpCircle } from 'react-icons/fi';
+import { FiPlus, FiHelpCircle, FiTrendingUp } from 'react-icons/fi';
 import { createVitalSign, getPatientVitals, VitalSign } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { Tooltip } from '@/components/Tooltip';
+import { TrendChart } from '@/components/TrendChart';
 
 interface VitalsTabProps {
   patientId: string;
@@ -47,6 +48,16 @@ export function VitalsTab({ patientId, vitals, onVitalsUpdate }: VitalsTabProps)
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [submitting, setSubmitting] = useState(false);
+
+  // Build trend data sorted chronologically
+  const sorted = [...vitals].sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+  const weightTrend = sorted
+    .filter(v => v.weight != null)
+    .map(v => ({ date: v.recordedAt, value: v.weight as number }));
+  const painTrend = sorted
+    .filter(v => v.painScore != null)
+    .map(v => ({ date: v.recordedAt, value: v.painScore as number }));
+  const showTrends = weightTrend.length >= 2 || painTrend.length >= 2;
 
   const handleAdd = async () => {
     if (!form.recordedAt) {
@@ -92,6 +103,36 @@ export function VitalsTab({ patientId, vitals, onVitalsUpdate }: VitalsTabProps)
           <FiPlus size={14} /> Record Vitals
         </button>
       </div>
+
+      {/* Vital Trends */}
+      {showTrends && (
+        <div className="mb-5 rounded-lg border border-indigo-100 bg-indigo-50 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <FiTrendingUp size={14} className="text-indigo-600" />
+            <span className="text-xs font-semibold text-indigo-800">Vital Trends</span>
+          </div>
+          <div className={`grid gap-3 ${weightTrend.length >= 2 && painTrend.length >= 2 ? 'sm:grid-cols-2' : 'grid-cols-1'}`}>
+            {weightTrend.length >= 2 && (
+              <div className="bg-white rounded-lg border border-indigo-200 p-3">
+                <div className="text-xs font-semibold text-gray-700 mb-1">Weight (kg)</div>
+                <p className="text-[10px] text-gray-400 mb-1">
+                  Weight loss &gt;5% over 1 month warrants clinical review
+                </p>
+                <TrendChart data={weightTrend} unit="kg" height={90} />
+              </div>
+            )}
+            {painTrend.length >= 2 && (
+              <div className="bg-white rounded-lg border border-indigo-200 p-3">
+                <div className="text-xs font-semibold text-gray-700 mb-1">Pain Score (0–10)</div>
+                <p className="text-[10px] text-gray-400 mb-1">
+                  Scores ≥7 indicate severe pain requiring urgent attention
+                </p>
+                <TrendChart data={painTrend} refMax={3} unit="/10" criticalHigh={7} height={90} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="mb-5 rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-3">

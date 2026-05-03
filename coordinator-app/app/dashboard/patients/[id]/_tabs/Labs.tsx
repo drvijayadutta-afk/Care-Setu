@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { FiPlus, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { FiPlus, FiChevronDown, FiChevronUp, FiTrendingUp } from 'react-icons/fi';
 import { createLabResult, getPatientLabResults, LabResult } from '@/lib/api';
 import { FLAG_COLORS } from '@/lib/recordRegistry';
 import { useFormDraft } from '@/lib/useFormDraft';
 import { toast } from '@/lib/toast';
 import { Tooltip } from '@/components/Tooltip';
+import { TrendChart } from '@/components/TrendChart';
 
 interface LabsTabProps {
   patientId: string;
@@ -49,6 +50,24 @@ export function LabsTab({ patientId, labResults, onLabsUpdate }: LabsTabProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [trendTestName, setTrendTestName] = useState<string | null>(null);
+
+  // Build a map of testName → sorted entries for trend charting
+  const trendableTests = (() => {
+    const map: Record<string, LabResult[]> = {};
+    for (const l of labResults) {
+      if (l.value == null) continue;
+      if (!map[l.testName]) map[l.testName] = [];
+      map[l.testName].push(l);
+    }
+    // Only tests with 2+ numeric data points
+    return Object.entries(map)
+      .filter(([, arr]) => arr.length >= 2)
+      .map(([name, arr]) => ({
+        name,
+        data: [...arr].sort((a, b) => new Date(a.testDate).getTime() - new Date(b.testDate).getTime()),
+      }));
+  })();
 
   const { clearDraft } = useFormDraft(`lab-draft-${patientId}`, form, setForm);
 
@@ -90,6 +109,8 @@ export function LabsTab({ patientId, labResults, onLabsUpdate }: LabsTabProps) {
 
   const catLabel = (val: string) => LAB_CATEGORIES.find(c => c.value === val)?.label ?? val;
 
+  const selectedTrend = trendableTests.find(t => t.name === trendTestName) ?? null;
+
   return (
     <div>
       <div className="flex justify-between mb-4">
@@ -101,6 +122,71 @@ export function LabsTab({ patientId, labResults, onLabsUpdate }: LabsTabProps) {
           <FiPlus size={14} /> Record Lab Result
         </button>
       </div>
+
+      {/* Trend Chart Panel */}
+      {trendableTests.length > 0 && (
+        <div className="mb-5 rounded-lg border border-indigo-100 bg-indigo-50 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <FiTrendingUp size={14} className="text-indigo-600" />
+            <span className="text-xs font-semibold text-indigo-800">Lab Value Trends</span>
+            <span className="text-xs text-indigo-500">— see how a specific test has changed over time</span>
+          </div>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {trendableTests.map(t => (
+              <button
+                key={t.name}
+                onClick={() => setTrendTestName(trendTestName === t.name ? null : t.name)}
+                className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+                  trendTestName === t.name
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-100'
+                }`}
+              >
+                {t.name} ({t.data.length} readings)
+              </button>
+            ))}
+          </div>
+
+          {selectedTrend && (() => {
+            const first = selectedTrend.data[0];
+            const refMin = first.refMin ?? undefined;
+            const refMax = first.refMax ?? undefined;
+            const unit = first.unit ?? '';
+            const chartData = selectedTrend.data.map(l => ({
+              date: l.testDate,
+              value: l.value as number,
+            }));
+            const latest = selectedTrend.data[selectedTrend.data.length - 1];
+            const latestFlag = FLAG_LABELS[latest.flag ?? ''];
+            return (
+              <div className="bg-white rounded-lg border border-indigo-200 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-gray-800">{selectedTrend.name}</span>
+                  <div className="flex items-center gap-2">
+                    {latestFlag && (
+                      <span className={`rounded px-2 py-0.5 text-xs ${FLAG_BADGE[latest.flag ?? ''] ?? 'bg-gray-100'}`}>
+                        Latest: {latestFlag.label}
+                      </span>
+                    )}
+                    {refMin != null || refMax != null ? (
+                      <span className="text-xs text-gray-400">
+                        Ref: {refMin ?? '?'}–{refMax ?? '?'} {unit}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <TrendChart
+                  data={chartData}
+                  refMin={refMin}
+                  refMax={refMax}
+                  unit={unit}
+                  height={120}
+                />
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {showForm && (
         <div className="mb-5 rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-3">

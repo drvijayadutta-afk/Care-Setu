@@ -1,6 +1,7 @@
 'use client';
 
 import { Checkin } from '@/lib/api';
+import { TrendChart } from '@/components/TrendChart';
 
 interface CheckinsTabProps {
   checkins: Checkin[];
@@ -46,8 +47,47 @@ export function CheckinsTab({ checkins }: CheckinsTabProps) {
     );
   }
 
+  // Build trend data — newest first from API, so reverse for chronological chart
+  const chronological = [...checkins].reverse();
+  const trendData = chronological.map(c => ({
+    date: c.createdAt,
+    value: (c as any).score as number,
+  })).filter(d => d.value >= 1 && d.value <= 5);
+
+  // Average of last 7 check-ins
+  const recent = trendData.slice(-7);
+  const avg = recent.length > 0 ? (recent.reduce((s, d) => s + d.value, 0) / recent.length).toFixed(1) : null;
+  const concernCount = recent.filter(d => d.value <= 2).length;
+
   return (
     <div>
+      {/* Trend Chart */}
+      {trendData.length >= 2 && (
+        <div className="mb-5 rounded-lg border border-indigo-100 bg-indigo-50 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-semibold text-indigo-800">Wellbeing Score Trend</span>
+            <div className="flex items-center gap-3 text-xs text-gray-500">
+              {avg && <span>7-day average: <strong className={parseFloat(avg) <= 2 ? 'text-red-600' : 'text-gray-700'}>{avg}/5</strong></span>}
+              {concernCount > 0 && (
+                <span className="text-red-600 font-medium">{concernCount} low-score day{concernCount > 1 ? 's' : ''} this week</span>
+              )}
+            </div>
+          </div>
+          <p className="text-[10px] text-indigo-500 mb-2">
+            Score 1 = very unwell · 5 = feeling good · green band = target (≥3)
+          </p>
+          <div className="bg-white rounded border border-indigo-200 p-2">
+            <TrendChart
+              data={trendData}
+              refMin={3}
+              refMax={5}
+              unit="/5"
+              height={100}
+            />
+          </div>
+        </div>
+      )}
+
       <p className="text-xs text-gray-500 mb-4">
         Patient self-reported wellbeing scores sent via WhatsApp. Score 1 = very unwell · 5 = feeling good.
       </p>
