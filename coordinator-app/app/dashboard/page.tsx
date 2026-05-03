@@ -127,8 +127,8 @@ export default function DashboardPage() {
       <div className="flex items-center justify-center rounded-lg bg-red-50 p-6 text-red-700">
         <FiAlertCircle className="mr-3 text-2xl" />
         <div>
-          <h3 className="font-semibold">Backend Server Not Running</h3>
-          <p className="text-sm">Start the backend: cd .. && npm run dev (port 3000)</p>
+          <h3 className="font-semibold">Unable to connect to server</h3>
+          <p className="text-sm">The server is starting up — please refresh in 30 seconds.</p>
         </div>
       </div>
     );

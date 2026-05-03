@@ -82,7 +82,11 @@ function startAisensyPolling() {
 async function start() {
   try {
     // Add CORS support — restrict to known frontend origins
-    await fastify.register(cors, { origin: config.allowedOrigins });
+    await fastify.register(cors, {
+      origin: config.allowedOrigins,
+      methods: ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Authorization", "Content-Type"],
+    });
 
     // Rate limiting — 15-minute windows, configurable per endpoint
     await fastify.register(rateLimit, {
