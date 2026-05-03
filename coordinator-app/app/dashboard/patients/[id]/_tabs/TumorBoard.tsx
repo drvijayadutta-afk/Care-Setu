@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { FiPlus, FiCalendar, FiCheckCircle, FiAlertCircle, FiActivity, FiRefreshCw, FiX, FiUsers, FiMessageCircle } from 'react-icons/fi';
+import { FiPlus, FiCalendar, FiCheckCircle, FiAlertCircle, FiActivity, FiRefreshCw, FiX, FiUsers, FiMessageCircle, FiPrinter } from 'react-icons/fi';
 import {
   TumorBoardMeeting, createTumorBoardMeeting, updateTumorBoardMeeting,
   signOffParticipant, generateMeetingBrief,
@@ -50,7 +50,15 @@ export function TumorBoardTab({
 }: TumorBoardTabProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [form, setForm] = useState({ title: '', scheduledAt: '', mode: 'sync', agenda: '' });
+  const [form, setForm] = useState({
+    title: '', scheduledAt: '', mode: 'sync',
+    // structured agenda fields
+    clinicalQuestion: '',
+    currentProtocol: '',
+    optionA: '', optionB: '', optionC: '',
+    discussionMinutes: '10',
+    openQuestions: '',
+  });
   const [submitting, setSubmitting] = useState(false);
   const [briefLoading, setBriefLoading] = useState(false);
   const [decisionForm, setDecisionForm] = useState({
@@ -84,15 +92,54 @@ export function TumorBoardTab({
     }
     setSubmitting(true);
     try {
+      // Build structured agenda text from the form fields
+      const agendaSections: string[] = [];
+      if (form.clinicalQuestion) agendaSections.push(`Clinical Question:\n${form.clinicalQuestion}`);
+      if (form.currentProtocol) agendaSections.push(`Current Protocol / Treatment:\n${form.currentProtocol}`);
+      // Auto-append abnormal labs summary
+      if (criticalLabs.length > 0 || abnormalLabs.length > 0) {
+        const labSummary = [...criticalLabs, ...abnormalLabs]
+          .map(l => `  • ${l.testName}: ${l.value} ${l.unit ?? ''} [${l.flag}]`)
+          .join('\n');
+        agendaSections.push(`Labs to Review:\n${labSummary}`);
+      }
+      if (latestImaging) {
+        agendaSections.push(`Imaging:\n  • ${latestImaging.modality} of ${latestImaging.bodyPart} (${new Date(latestImaging.studyDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })})`);
+      }
+      if (latestPathology) {
+        agendaSections.push(`Pathology:\n  • ${latestPathology.diagnosis} — ${latestPathology.site} (${latestPathology.specimenType})`);
+      }
+      // Patient symptom summary
+      if (recentCheckins.length > 0) {
+        const scores = recentCheckins.map(c => (c as any).score).join(', ');
+        const lowCount = recentCheckins.filter(c => (c as any).score <= 2).length;
+        let symptomLine = `Symptom Burden (last ${recentCheckins.length} check-ins):\n  • Wellbeing scores: ${scores}/5`;
+        if (lowCount > 0) symptomLine += `\n  • ⚠ ${lowCount} low-score day(s) — patient distressed`;
+        if (uniqueSymptoms.length > 0) symptomLine += `\n  • Reported: ${uniqueSymptoms.map(s => symptomLabel(s as string)).join(', ')}`;
+        agendaSections.push(symptomLine);
+      }
+      if (form.optionA || form.optionB || form.optionC) {
+        const opts = [
+          form.optionA ? `  A) ${form.optionA}` : null,
+          form.optionB ? `  B) ${form.optionB}` : null,
+          form.optionC ? `  C) ${form.optionC}` : null,
+        ].filter(Boolean).join('\n');
+        agendaSections.push(`Treatment Options to Consider:\n${opts}`);
+      }
+      if (form.openQuestions) agendaSections.push(`Open Questions / Carry-Forward:\n${form.openQuestions}`);
+      agendaSections.push(`Estimated Discussion Time: ${form.discussionMinutes} minutes`);
+
+      const agenda = agendaSections.join('\n\n');
+
       const created = await createTumorBoardMeeting(patientId, {
         title: form.title.trim(),
         scheduledAt: new Date(form.scheduledAt).toISOString(),
         mode: form.mode,
-        agenda: form.agenda || undefined,
+        agenda: agenda || undefined,
       });
       onMeetingsUpdate([created, ...meetings]);
       setShowCreate(false);
-      setForm({ title: '', scheduledAt: '', mode: 'sync', agenda: '' });
+      setForm({ title: '', scheduledAt: '', mode: 'sync', clinicalQuestion: '', currentProtocol: '', optionA: '', optionB: '', optionC: '', discussionMinutes: '10', openQuestions: '' });
       toast({ type: 'success', message: 'Tumor board meeting scheduled — care team members will be invited automatically' });
     } catch {
       toast({ type: 'error', message: 'Could not schedule meeting — please try again' });
@@ -185,50 +232,172 @@ export function TumorBoardTab({
 
       {/* Create meeting form */}
       {showCreate && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h4 className="font-medium text-indigo-900">New Tumor Board Meeting</h4>
+            <div>
+              <h4 className="font-semibold text-indigo-900">New Tumor Board Meeting — Agenda Builder</h4>
+              <p className="text-xs text-indigo-600 mt-0.5">Labs, imaging, and patient symptoms are auto-populated from the patient record.</p>
+            </div>
             <button onClick={() => setShowCreate(false)} className="text-indigo-600 hover:text-indigo-900"><FiX size={18} /></button>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-700">Meeting Title *</label>
-            <input
-              type="text"
-              placeholder="e.g. Oncology MDT — Breast Cancer Cases, Weekly GI Tumor Board"
-              value={form.title}
-              onChange={e => setForm({ ...form, title: e.target.value })}
-              className={inp} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+
+          {/* ── Section 1: Meeting basics ── */}
+          <div className="rounded-lg bg-white border border-indigo-100 p-3 space-y-3">
+            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Meeting Details</p>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-700">Date &amp; Time *</label>
-              <input type="datetime-local" value={form.scheduledAt}
-                onChange={e => setForm({ ...form, scheduledAt: e.target.value })}
+              <label className="text-xs font-medium text-gray-700">Meeting Title *</label>
+              <input
+                type="text"
+                placeholder="e.g. Oncology MDT — Breast Cancer Cases, Weekly GI Tumor Board"
+                value={form.title}
+                onChange={e => setForm({ ...form, title: e.target.value })}
+                className={inp} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-700">Date &amp; Time *</label>
+                <input type="datetime-local" value={form.scheduledAt}
+                  onChange={e => setForm({ ...form, scheduledAt: e.target.value })}
+                  className={inp} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-gray-700">Meeting Format</label>
+                <select value={form.mode}
+                  onChange={e => setForm({ ...form, mode: e.target.value })}
+                  className={inp}>
+                  <option value="sync">In-person / Live video meeting</option>
+                  <option value="async">Asynchronous (online, no fixed time)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Section 2: Clinical question & protocol ── */}
+          <div className="rounded-lg bg-white border border-indigo-100 p-3 space-y-3">
+            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Clinical Context</p>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">
+                Clinical Question for the Board *
+                <span className="text-gray-400 font-normal ml-1">— the specific decision this meeting should answer</span>
+              </label>
+              <textarea
+                placeholder="e.g. Decide surgery timing after Cycle 2 FOLFOX. Is the response sufficient for resection? Address Grade 3 peripheral neuropathy."
+                value={form.clinicalQuestion}
+                onChange={e => setForm({ ...form, clinicalQuestion: e.target.value })}
+                rows={2}
                 className={inp} />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-gray-700">Meeting Format</label>
-              <select value={form.mode}
-                onChange={e => setForm({ ...form, mode: e.target.value })}
+              <label className="text-xs font-medium text-gray-700">
+                Current Protocol / Treatment
+                <span className="text-gray-400 font-normal ml-1">— what the patient is currently on</span>
+              </label>
+              <input
+                placeholder="e.g. FOLFOX Cycle 3/6, AC-T Cycle 4/8, Radiation 50 Gy in 25 fractions"
+                value={form.currentProtocol}
+                onChange={e => setForm({ ...form, currentProtocol: e.target.value })}
+                className={inp} />
+            </div>
+          </div>
+
+          {/* ── Section 3: Auto-populated clinical data ── */}
+          {(criticalLabs.length > 0 || abnormalLabs.length > 0 || latestImaging || latestPathology || recentCheckins.length > 0) && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-2">
+              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Auto-Populated from Patient Record</p>
+              <p className="text-[10px] text-amber-600">This data will be included in the agenda automatically — no need to type it again.</p>
+              {(criticalLabs.length > 0 || abnormalLabs.length > 0) && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-0.5">Labs to Review</p>
+                  <div className="space-y-0.5">
+                    {[...criticalLabs, ...abnormalLabs].map(l => (
+                      <div key={l.id} className={`text-xs ${l.flag === 'CRITICAL' ? 'text-red-700 font-semibold' : 'text-amber-800'}`}>
+                        • {l.testName}: {l.value} {l.unit} [{l.flag}]
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {latestImaging && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-0.5">Latest Imaging</p>
+                  <p className="text-xs text-gray-600">• {latestImaging.modality} of {latestImaging.bodyPart}</p>
+                </div>
+              )}
+              {latestPathology && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-0.5">Latest Pathology</p>
+                  <p className="text-xs text-gray-600">• {latestPathology.diagnosis} — {latestPathology.site}</p>
+                </div>
+              )}
+              {recentCheckins.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-0.5">Patient Symptom Burden</p>
+                  <p className="text-xs text-gray-600">
+                    • Last {recentCheckins.length} check-in scores: {recentCheckins.map(c => (c as any).score).join(', ')}/5
+                    {recentCheckins.filter(c => (c as any).score <= 2).length > 0 && (
+                      <span className="text-red-600 ml-1">⚠ distress detected</span>
+                    )}
+                  </p>
+                  {uniqueSymptoms.length > 0 && (
+                    <p className="text-xs text-gray-600">• Reported: {uniqueSymptoms.map(s => symptomLabel(s as string)).join(', ')}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Section 4: Treatment options ── */}
+          <div className="rounded-lg bg-white border border-indigo-100 p-3 space-y-3">
+            <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+              Treatment Options to Consider
+              <span className="text-gray-400 font-normal normal-case ml-1 tracking-normal">— for the board to debate (optional)</span>
+            </p>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">Option A</label>
+              <input placeholder="e.g. Continue FOLFOX for 2 more cycles then re-assess" value={form.optionA}
+                onChange={e => setForm({ ...form, optionA: e.target.value })} className={inp} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">Option B</label>
+              <input placeholder="e.g. Proceed to surgical resection after Cycle 3" value={form.optionB}
+                onChange={e => setForm({ ...form, optionB: e.target.value })} className={inp} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">Option C (if applicable)</label>
+              <input placeholder="e.g. Switch to palliative intent — FOLFIRI" value={form.optionC}
+                onChange={e => setForm({ ...form, optionC: e.target.value })} className={inp} />
+            </div>
+          </div>
+
+          {/* ── Section 5: Open questions & time ── */}
+          <div className="rounded-lg bg-white border border-indigo-100 p-3 space-y-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">
+                Open Questions / Carry-Forward from Previous Meeting
+              </label>
+              <textarea
+                placeholder="Any unresolved questions from last time, or new questions to address"
+                value={form.openQuestions}
+                onChange={e => setForm({ ...form, openQuestions: e.target.value })}
+                rows={2}
+                className={inp} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">Estimated Discussion Time</label>
+              <select value={form.discussionMinutes}
+                onChange={e => setForm({ ...form, discussionMinutes: e.target.value })}
                 className={inp}>
-                <option value="sync">In-person / Live video meeting</option>
-                <option value="async">Asynchronous (online, no fixed time)</option>
+                {['5', '10', '15', '20', '30', '45', '60'].map(t => (
+                  <option key={t} value={t}>{t} minutes</option>
+                ))}
               </select>
             </div>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-700">Agenda / Questions for the Board (optional)</label>
-            <textarea
-              placeholder="What should the team discuss? e.g. Review response to Cycle 2 FOLFOX, decide on surgery timing, address grade 3 neuropathy"
-              value={form.agenda}
-              onChange={e => setForm({ ...form, agenda: e.target.value })}
-              rows={2}
-              className={inp} />
-          </div>
+
           <div className="flex gap-2">
             <button onClick={handleCreate} disabled={submitting}
-              className="rounded bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:bg-gray-400">
-              {submitting ? 'Scheduling…' : 'Schedule Meeting'}
+              className="rounded bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:bg-gray-400">
+              {submitting ? 'Scheduling…' : 'Schedule Meeting & Build Agenda'}
             </button>
             <button onClick={() => setShowCreate(false)} disabled={submitting}
               className="rounded border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
@@ -296,10 +465,48 @@ export function TumorBoardTab({
       {selectedMeeting && (
         <div className="rounded-xl border-2 border-indigo-200 bg-white overflow-hidden mt-4">
           <div className="flex items-center justify-between border-b border-indigo-100 px-5 py-3 bg-indigo-50">
-            <h4 className="font-semibold text-gray-900">{selectedMeeting.title}</h4>
-            <button onClick={() => setSelectedId(null)} className="text-gray-500 hover:text-gray-700 p-1">
-              <FiX size={16} />
-            </button>
+            <div>
+              <h4 className="font-semibold text-gray-900">{selectedMeeting.title}</h4>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {new Date(selectedMeeting.scheduledAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                {selectedMeeting.mode === 'async' && ' · Asynchronous'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const w = window.open('', '_blank');
+                  if (!w) return;
+                  const agenda = selectedMeeting.agenda || 'No agenda recorded.';
+                  const brief = selectedMeeting.briefText || '';
+                  const decision = selectedMeeting.decision;
+                  w.document.write(`<!DOCTYPE html><html><head><title>${selectedMeeting.title}</title>
+<style>body{font-family:Arial,sans-serif;max-width:700px;margin:40px auto;color:#111}
+h1{font-size:18px;margin-bottom:4px}h2{font-size:13px;color:#6366f1;margin:20px 0 6px;border-bottom:1px solid #e0e0e0;padding-bottom:3px}
+pre{white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.6;background:#f9f9f9;padding:12px;border-radius:4px}
+.meta{font-size:12px;color:#666;margin-bottom:24px}@media print{body{margin:20px}}</style></head><body>
+<h1>${selectedMeeting.title}</h1>
+<div class="meta">
+Scheduled: ${new Date(selectedMeeting.scheduledAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}<br>
+Mode: ${selectedMeeting.mode === 'async' ? 'Asynchronous' : 'In-person / Live'}<br>
+Participants: ${selectedMeeting.participants.map(p => `${p.name} (${formatRole(p.role)})`).join(', ') || 'None'}
+</div>
+<h2>AGENDA</h2><pre>${agenda}</pre>
+${brief ? `<h2>MDT BRIEF</h2><pre>${brief}</pre>` : ''}
+${decision?.treatment ? `<h2>DECISION</h2><pre>Treatment: ${decision.treatment}\nProtocol: ${decision.protocol || '—'}\nNext Review: ${decision.nextReview || '—'}\nNotes: ${decision.notes || '—'}</pre>` : ''}
+</body></html>`);
+                  w.document.close();
+                  setTimeout(() => w.print(), 300);
+                }}
+                className="flex items-center gap-1.5 rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                title="Print or save as PDF"
+              >
+                <FiPrinter size={12} /> Print Agenda
+              </button>
+              <button onClick={() => setSelectedId(null)} className="text-gray-500 hover:text-gray-700 p-1">
+                <FiX size={16} />
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-gray-100">
@@ -484,6 +691,16 @@ export function TumorBoardTab({
                   </div>
                 )}
               </div>
+
+              {/* Structured Agenda */}
+              {selectedMeeting.agenda && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="text-xs font-semibold text-amber-900 mb-2">Meeting Agenda</div>
+                  <pre className="whitespace-pre-wrap font-sans text-xs text-amber-800 leading-relaxed max-h-40 overflow-y-auto">
+                    {selectedMeeting.agenda}
+                  </pre>
+                </div>
+              )}
 
               {/* AI Brief */}
               <div className="rounded-lg border border-gray-200 p-3">
