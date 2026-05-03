@@ -61,8 +61,8 @@ export async function detectChangeSinceLastVisit(
     prisma.medicationLog.count({
       where: {
         medication: { patientId },
-        scheduledAt: { gte: since },
-        status: "skipped",
+        createdAt: { gte: since },
+        taken: false,
       },
     }),
   ]);

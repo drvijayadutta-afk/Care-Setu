@@ -1,0 +1,25 @@
+{
+  "name": "Care Setu — Doctor",
+  "short_name": "Care Setu",
+  "description": "Your patients. Your day. In your pocket.",
+  "start_url": "/doctor/today",
+  "scope": "/doctor/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f9fafb",
+  "theme_color": "#4338ca",
+  "icons": [
+    {
+      "src": "/doctor/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/doctor/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
