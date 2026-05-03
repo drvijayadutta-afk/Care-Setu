@@ -111,59 +111,234 @@ export async function extractDocumentData(
   return JSON.parse(cleaned);
 }
 
-// ─── MDT Summary Generator ───────────────────────────────────────────────────
+// ─── MDT Summary Generator (template-based, no external API) ─────────────────
 
 export async function generateMdtSummary(patient: any): Promise<string> {
-  const recentCheckins = (patient.checkins ?? []).slice(0, 7);
-  const avgScore =
-    recentCheckins.length > 0
-      ? (recentCheckins.reduce((s: number, c: any) => s + c.score, 0) / recentCheckins.length).toFixed(1)
-      : "N/A";
+  const fmt = (d: any) => d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "unknown";
+  const na = (v: any) => v ?? "N/A";
 
-  const abnormalLabs = (patient.labResults ?? [])
-    .filter((l: any) => l.isAbnormal)
-    .slice(0, 10)
-    .map((l: any) => `${l.testName}: ${l.value} ${l.unit ?? ""} [${l.flag}]`)
-    .join(", ");
+  // ── Data extraction ──────────────────────────────────────────────────────
+  const latestVitals = patient.vitalSigns?.[0];
+  const ecog = patient.ecogScore ?? latestVitals?.ecogScore;
+
+  const allCheckins: any[] = patient.checkins ?? [];
+  const recent14 = allCheckins.slice(0, 14);
+  const avgScore = recent14.length > 0
+    ? (recent14.reduce((s: number, c: any) => s + (c.score ?? 0), 0) / recent14.length).toFixed(1)
+    : null;
+  const highScoreCheckins = recent14.filter((c: any) => (c.score ?? 0) >= 4);
+  // Collect all symptom keywords reported across recent check-ins
+  const allSymptomWords: string[] = recent14.flatMap((c: any) => {
+    if (!c.symptoms) return [];
+    if (Array.isArray(c.symptoms)) return c.symptoms as string[];
+    if (typeof c.symptoms === "string") return [c.symptoms];
+    return [];
+  });
+  const uniqueSymptoms = [...new Set(allSymptomWords)].slice(0, 6);
+
+  const abnormalLabs: any[] = (patient.labResults ?? []).filter((l: any) => l.isAbnormal || (l.flag && l.flag !== "NORMAL"));
+  const criticalLabs = abnormalLabs.filter((l: any) => l.flag === "CRITICAL");
+  const highLabs = abnormalLabs.filter((l: any) => l.flag === "HIGH");
+  const lowLabs = abnormalLabs.filter((l: any) => l.flag === "LOW");
 
   const latestImaging = patient.imagingReports?.[0];
   const latestPath = patient.pathologyReports?.[0];
-  const latestVitals = patient.vitalSigns?.[0];
-  const careTeam = (patient.careTeamMembers ?? [])
-    .map((m: any) => `${m.role}: ${m.name}`)
-    .join(", ");
 
-  const context = `
-PATIENT: ${patient.name}, ${patient.gender ?? "?"}, DOB: ${patient.dateOfBirth ? new Date(patient.dateOfBirth).toLocaleDateString() : "unknown"}
-DIAGNOSIS: ${patient.cancerType} | Stage: ${patient.stage ?? "not staged"} | Site: ${patient.primarySite ?? "?"} | Histology: ${patient.histology ?? "?"}
-DIAGNOSIS DATE: ${patient.diagnosisDate ? new Date(patient.diagnosisDate).toLocaleDateString() : "unknown"}
-TREATMENT: ${patient.treatmentProtocol}, Cycle ${patient.currentCycle} (started ${new Date(patient.cycleStartDate).toLocaleDateString()})
-ECOG: ${patient.ecogScore ?? latestVitals?.ecogScore ?? "not recorded"}
-HOSPITAL: ${patient.hospitalName} | PRIMARY DR: ${patient.doctorName}
-CARE TEAM: ${careTeam || "not configured"}
-ALLERGIES: ${(patient.allergies ?? []).join(", ") || "none recorded"}
-COMORBIDITIES: ${(patient.comorbidities ?? []).join(", ") || "none recorded"}
+  const activeMeds: any[] = patient.medications ?? [];
+  const unresolvedAlerts: any[] = patient.alerts ?? [];
+  const careTeam: any[] = patient.careTeamMembers ?? [];
+  const priorMdtNotes: any[] = patient.clinicalNotes ?? [];
 
-LATEST VITALS: Weight ${latestVitals?.weight ?? "?"}kg, BP ${latestVitals?.bpSystolic ?? "?"}/${latestVitals?.bpDiastolic ?? "?"}mmHg, SpO2 ${latestVitals?.oxygenSat ?? "?"}%
+  const missedCheckins = recent14.filter((c: any) => c.missed === true || c.score == null).length;
 
-RECENT SYMPTOM CHECK-INS (last 7): avg score ${avgScore}/5
-ACTIVE ALERTS: ${patient.alerts?.length ?? 0}
+  // ── Section 1: Clinical Summary ──────────────────────────────────────────
+  const ageStr = patient.dateOfBirth
+    ? `${Math.floor((Date.now() - new Date(patient.dateOfBirth).getTime()) / (365.25 * 24 * 3600 * 1000))}y`
+    : patient.age ? `${patient.age}y` : "age unknown";
 
-ABNORMAL LAB VALUES: ${abnormalLabs || "none flagged"}
+  let s1 = `═══════════════════════════════════════════════════════════════
+MDT BRIEF  —  ${patient.name?.toUpperCase() ?? "PATIENT"}  —  Generated ${new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+═══════════════════════════════════════════════════════════════
 
-LATEST IMAGING: ${latestImaging ? `${latestImaging.modality} ${latestImaging.bodyPart} (${new Date(latestImaging.studyDate).toLocaleDateString()}) — ${latestImaging.impression ?? "no impression recorded"}` : "none on file"}
+1. CLINICAL SUMMARY
+───────────────────
+Patient    : ${na(patient.name)}, ${patient.gender?.toUpperCase() ?? "?"}, ${ageStr}
+Diagnosis  : ${na(patient.cancerType)}${patient.stage ? ` — Stage ${patient.stage}` : ""}
+`;
+  if (patient.primarySite) s1 += `Primary site: ${patient.primarySite}\n`;
+  if (patient.histology)   s1 += `Histology   : ${patient.histology}\n`;
+  if (patient.diagnosisDate) s1 += `Dx date     : ${fmt(patient.diagnosisDate)}\n`;
+  s1 += `Hospital    : ${na(patient.hospitalName)}\n`;
+  s1 += `Treating Dr : ${na(patient.doctorName)}\n`;
+  if (patient.comorbidities?.length) s1 += `Comorbidities: ${patient.comorbidities.join(", ")}\n`;
+  if (patient.allergies?.length)     s1 += `Allergies   : ${patient.allergies.join(", ")}\n`;
+  if (careTeam.length) {
+    s1 += `Care team   : ${careTeam.map((m: any) => `${m.name} (${m.role})`).join(" · ")}\n`;
+  }
 
-LATEST PATHOLOGY: ${latestPath ? `${latestPath.specimenType} from ${latestPath.site} — ${latestPath.diagnosis}` : "none on file"}
+  // ── Section 2: Treatment Status ──────────────────────────────────────────
+  let s2 = `
+2. TREATMENT STATUS
+───────────────────
+Protocol    : ${na(patient.treatmentProtocol)}
+Cycle       : ${na(patient.currentCycle)}${patient.cycleStartDate ? ` (started ${fmt(patient.cycleStartDate)})` : ""}
+ECOG        : ${ecog != null ? ecog : "not recorded"}
+`;
+  if (latestVitals) {
+    const parts: string[] = [];
+    if (latestVitals.weight)    parts.push(`Wt ${latestVitals.weight} kg`);
+    if (latestVitals.height)    parts.push(`Ht ${latestVitals.height} cm`);
+    if (latestVitals.bpSystolic) parts.push(`BP ${latestVitals.bpSystolic}/${latestVitals.bpDiastolic} mmHg`);
+    if (latestVitals.oxygenSat) parts.push(`SpO₂ ${latestVitals.oxygenSat}%`);
+    if (latestVitals.pulseRate) parts.push(`HR ${latestVitals.pulseRate}/min`);
+    if (latestVitals.temperature) parts.push(`Temp ${latestVitals.temperature}°C`);
+    if (parts.length) s2 += `Vitals      : ${parts.join(", ")} (${fmt(latestVitals.recordedAt)})\n`;
+  }
+  if (activeMeds.length) {
+    s2 += `Medications : ${activeMeds.map((m: any) => m.name + (m.frequency ? ` (${m.frequency})` : "")).join(", ")}\n`;
+  } else {
+    s2 += `Medications : none recorded\n`;
+  }
 
-ACTIVE MEDICATIONS: ${(patient.medications ?? []).map((m: any) => m.name).join(", ") || "none recorded"}
+  // ── Section 3: Recent Symptoms & Toxicity ────────────────────────────────
+  let s3 = `
+3. RECENT SYMPTOMS & TOXICITY  (last ${recent14.length} check-ins via WhatsApp)
+────────────────────────────────────────────────────────────────
+`;
+  if (recent14.length === 0) {
+    s3 += `No patient self-reports on file.\n`;
+  } else {
+    s3 += `Avg symptom score : ${avgScore}/5\n`;
+    s3 += `High-burden days  : ${highScoreCheckins.length} of ${recent14.length} (score ≥ 4)\n`;
+    if (uniqueSymptoms.length) {
+      s3 += `Reported symptoms : ${uniqueSymptoms.join(", ")}\n`;
+    }
+    if (missedCheckins > 0) {
+      s3 += `Missed check-ins  : ${missedCheckins} — follow-up recommended\n`;
+    }
+    // Show last 5 with date + score
+    s3 += `\nTimeline (most recent first):\n`;
+    recent14.slice(0, 5).forEach((c: any) => {
+      const scoreStr = c.score != null ? `${c.score}/5` : "–";
+      const syms = Array.isArray(c.symptoms) && c.symptoms.length ? ` [${(c.symptoms as string[]).slice(0, 3).join(", ")}]` : "";
+      s3 += `  ${fmt(c.createdAt ?? c.recordedAt)}  Score ${scoreStr}${syms}\n`;
+    });
+  }
 
-MDT DECISIONS ON FILE: ${patient.clinicalNotes?.length ?? 0}
-`.trim();
+  // ── Section 4: Key Lab/Imaging Findings ──────────────────────────────────
+  let s4 = `
+4. KEY LAB & IMAGING FINDINGS
+───────────────────────────────
+`;
+  if (abnormalLabs.length === 0) {
+    s4 += `Labs        : No abnormal values on file\n`;
+  } else {
+    if (criticalLabs.length) {
+      s4 += `⚠ CRITICAL  : ${criticalLabs.map((l: any) => `${l.testName} ${l.value} ${l.unit ?? ""}`).join(", ")}\n`;
+    }
+    if (highLabs.length) {
+      s4 += `Elevated    : ${highLabs.map((l: any) => `${l.testName} ${l.value} ${l.unit ?? ""}`).join(", ")}\n`;
+    }
+    if (lowLabs.length) {
+      s4 += `Low         : ${lowLabs.map((l: any) => `${l.testName} ${l.value} ${l.unit ?? ""}`).join(", ")}\n`;
+    }
+    const latest = (patient.labResults ?? [])[0];
+    if (latest) s4 += `(Most recent labs: ${fmt(latest.testDate)})\n`;
+  }
+  if (latestImaging) {
+    s4 += `\nImaging     : ${latestImaging.modality ?? ""}${latestImaging.bodyPart ? ` — ${latestImaging.bodyPart}` : ""} (${fmt(latestImaging.studyDate)})\n`;
+    if (latestImaging.impression) s4 += `Impression  : ${latestImaging.impression}\n`;
+    if (latestImaging.response)   s4 += `Response    : ${latestImaging.response}\n`;
+  } else {
+    s4 += `\nImaging     : No reports on file\n`;
+  }
+  if (latestPath) {
+    s4 += `\nPathology   : ${latestPath.specimenType ?? ""} from ${latestPath.site ?? "?"} (${fmt(latestPath.reportDate)})\n`;
+    if (latestPath.diagnosis) s4 += `Diagnosis   : ${latestPath.diagnosis}\n`;
+    if (latestPath.grade)     s4 += `Grade       : ${latestPath.grade}\n`;
+    if (latestPath.margins)   s4 += `Margins     : ${latestPath.margins}\n`;
+    if (latestPath.ihcFindings && Object.keys(latestPath.ihcFindings).length) {
+      const ihc = Object.entries(latestPath.ihcFindings).map(([k, v]) => `${k}: ${v}`).join(", ");
+      s4 += `IHC         : ${ihc}\n`;
+    }
+  } else {
+    s4 += `Pathology   : No reports on file\n`;
+  }
 
-  const systemPrompt = `You are a senior oncologist preparing a concise MDT (Multidisciplinary Team) brief.
-Write a structured 1-page clinical summary suitable for a tumor board meeting.
-Use clinical language. Sections: Clinical Summary, Treatment Status, Recent Symptoms & Toxicity, Key Lab/Imaging Findings, Active Issues & Alerts, Suggested Discussion Points.
-Be concise and factual. Do not add anything not present in the data provided.`;
+  // ── Section 5: Active Issues & Alerts ───────────────────────────────────
+  let s5 = `
+5. ACTIVE ISSUES & ALERTS
+──────────────────────────
+`;
+  if (unresolvedAlerts.length === 0) {
+    s5 += `No active unresolved alerts.\n`;
+  } else {
+    unresolvedAlerts.slice(0, 8).forEach((a: any) => {
+      const sev = a.severity ? `[${a.severity}] ` : "";
+      s5 += `• ${sev}${a.message ?? a.type ?? "Alert"}\n`;
+    });
+    if (unresolvedAlerts.length > 8) s5 += `  … and ${unresolvedAlerts.length - 8} more\n`;
+  }
+  if (priorMdtNotes.length) {
+    s5 += `\nPrior MDT decisions on file: ${priorMdtNotes.length}\n`;
+    const last = priorMdtNotes[0];
+    if (last?.content) s5 += `Last decision (${fmt(last.noteDate)}): ${last.content.slice(0, 200)}${last.content.length > 200 ? "…" : ""}\n`;
+  }
 
-  return askClaude(systemPrompt, context, 2500);
+  // ── Section 6: Suggested Discussion Points (rule-based) ─────────────────
+  const points: string[] = [];
+
+  if (criticalLabs.length > 0) {
+    points.push(`Critical lab values (${criticalLabs.map((l: any) => l.testName).join(", ")}) — assess impact on treatment continuation`);
+  }
+  if (latestImaging?.response === "PD") {
+    points.push(`Imaging shows Progressive Disease — review treatment change options`);
+  }
+  if (latestImaging?.response === "PR") {
+    points.push(`Partial Response on imaging — evaluate consolidation or maintenance approach`);
+  }
+  if (avgScore && parseFloat(avgScore) >= 3.5) {
+    points.push(`High average symptom burden (${avgScore}/5) — review supportive care and dose modification`);
+  }
+  if (highScoreCheckins.length >= 3) {
+    points.push(`${highScoreCheckins.length} high-severity symptom days — consider dose reduction or supportive intervention`);
+  }
+  if (missedCheckins >= 3) {
+    points.push(`${missedCheckins} missed check-ins — assess adherence and patient engagement`);
+  }
+  if (ecog != null && ecog >= 3) {
+    points.push(`ECOG ${ecog} — poor performance status, review treatment intensity`);
+  }
+  if (!ecog && ecog !== 0) {
+    points.push(`ECOG score not documented — record at today's review`);
+  }
+  if (unresolvedAlerts.length >= 3) {
+    points.push(`${unresolvedAlerts.length} unresolved alerts — triage and close loop`);
+  }
+  if (!latestPath) {
+    points.push(`No pathology on file — confirm histological confirmation is available`);
+  }
+  if (!latestImaging) {
+    points.push(`No imaging reports on file — schedule response assessment if on active treatment`);
+  }
+  if (activeMeds.length === 0) {
+    points.push(`No active medications recorded — confirm treatment plan is up to date`);
+  }
+  if (careTeam.length === 0) {
+    points.push(`No care team configured — assign MDT members for proper coordination`);
+  }
+  if (!patient.stage) {
+    points.push(`Disease stage not recorded — update staging documentation`);
+  }
+
+  // Always suggest next review
+  points.push(`Confirm date and modality of next response assessment / follow-up`);
+
+  const s6 = `
+6. SUGGESTED DISCUSSION POINTS
+────────────────────────────────
+${points.map((p, i) => `${i + 1}. ${p}`).join("\n")}
+`;
+
+  return [s1, s2, s3, s4, s5, s6].join("").trim();
 }
