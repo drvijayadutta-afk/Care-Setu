@@ -268,6 +268,20 @@ export default function DoctorPatientPage() {
           )}
         </section>
 
+        {/* Voice Note */}
+        <section className="rounded-xl bg-emerald-50 p-4 shadow-sm">
+          <h2 className="mb-1 text-sm font-semibold text-emerald-900">🎙️ Voice Note</h2>
+          <p className="mb-3 text-xs text-emerald-700">
+            Speak for 30 seconds after the visit. Whisper transcribes, Claude structures into a signed SOAP note.
+          </p>
+          <button
+            onClick={() => router.push(`/doctor/visit/${patientId}`)}
+            className="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-semibold text-white shadow-sm active:bg-emerald-700"
+          >
+            Record Visit Note
+          </button>
+        </section>
+
         {/* Defense Mode — Care Record */}
         <section className="rounded-xl bg-indigo-50 p-4 shadow-sm">
           <h2 className="mb-1 text-sm font-semibold text-indigo-900">🛡️ Defense Mode</h2>

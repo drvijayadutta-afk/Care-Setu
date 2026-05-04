@@ -384,7 +384,7 @@ model ClinicalNote {
   id          String    @id @default(uuid())
   patientId   String
   noteDate    DateTime
-  noteType    String    // CONSULTATION, PROGRESS, DISCHARGE, MDT_DECISION, PROCEDURE, NURSING
+  noteType    String    // CONSULTATION, PROGRESS, DISCHARGE, MDT_DECISION, PROCEDURE, NURSING, SOAP
   title       String
   content     String
   authorName  String
@@ -395,6 +395,14 @@ model ClinicalNote {
   documentId  String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  // Hook 5: Voice-to-SOAP fields
+  audioUrl        String?   // Supabase Storage path to the raw audio recording
+  transcript      String?   // Raw Whisper transcription
+  structuredFields Json?    // { hpi, exam, assessment, plan } — Claude-structured SOAP
+  language        String?   // en | hi | ta | mr | bn (doctor's preferred language)
+  signedAt        DateTime? // when the doctor confirmed and signed the note
+  signedByDoctorId String?  // Doctor.id
 
   patient Patient @relation(fields: [patientId], references: [id])
 }

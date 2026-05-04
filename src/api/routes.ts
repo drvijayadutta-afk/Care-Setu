@@ -17,6 +17,7 @@ import { registerOutcomesRoutes } from "./routes/outcomes";
 import { registerDoctorTodayRoutes } from "./routes/doctor-today";
 import { registerDoctorCareRecordRoutes } from "./routes/doctor-care-record";
 import { registerDoctorInboxRoutes } from "./routes/doctor-inbox";
+import { registerDoctorVoiceNoteRoutes } from "./routes/doctor-voice-notes";
 
 export async function registerApiRoutes(fastify: FastifyInstance) {
   const auth = [(fastify as any).authenticate];
@@ -58,4 +59,5 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   registerDoctorTodayRoutes(fastify);
   registerDoctorCareRecordRoutes(fastify);
   registerDoctorInboxRoutes(fastify);
+  registerDoctorVoiceNoteRoutes(fastify);
 }

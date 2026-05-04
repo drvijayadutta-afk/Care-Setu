@@ -5,6 +5,7 @@ import websocket from "@fastify/websocket";
 import jwt from "@fastify/jwt";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
+import multipart from "@fastify/multipart";
 import {
   handleWebhookVerification,
   handleWebhookMessage,
@@ -111,6 +112,14 @@ async function start() {
 
     // Cookie support for HttpOnly JWT cookies
     await fastify.register(cookie);
+
+    // Multipart file upload support (Hook 5: voice notes)
+    await fastify.register(multipart, {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10 MB max audio
+        files: 1,
+      },
+    });
 
     // JWT authentication — secret validated at boot in src/config/env.ts.
     // The cookie config tells @fastify/jwt to read the token from the cookie
