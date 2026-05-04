@@ -106,6 +106,8 @@ model Doctor {
   referralsTo     Referral[]             @relation("ReferralTo")
   doctorUser      DoctorUser?
   careRecords     CareRecordGeneration[]
+  cmeCredits      CmeCredit[]
+  cohortExports   CohortExport[]
 }
 
 // Authentication identity for a Doctor. One-to-one with Doctor.
@@ -604,4 +606,33 @@ model CareRecordGeneration {
 
   @@index([patientId, generatedAt])
   @@index([doctorId])
+}
+
+// ─── Hook 7: CME Tracker + Publication Export ───────────────────────────────
+
+model CmeCredit {
+  id        String   @id @default(uuid())
+  doctorId  String   // Doctor.id
+  eventType String   // mdt_participation | case_documentation | voice_note_signed | referral_accepted
+  hours     Float    // CME hours awarded (configurable per event type)
+  evidence  Json     // { meetingId, noteId, referralId, etc. }
+  awardedAt DateTime @default(now())
+  year      Int      // Calendar year for NMC certificate grouping
+
+  doctor Doctor @relation(fields: [doctorId], references: [id])
+
+  @@index([doctorId, year])
+}
+
+model CohortExport {
+  id          String   @id @default(uuid())
+  doctorId    String   // Doctor.id who requested the export
+  cohortDef   Json     // { cancerType, stage, protocol, dateFrom, dateTo }
+  rowCount    Int      // number of de-identified rows
+  downloadKey String?  // Supabase Storage key
+  exportedAt  DateTime @default(now())
+
+  doctor Doctor @relation(fields: [doctorId], references: [id])
+
+  @@index([doctorId, exportedAt])
 }

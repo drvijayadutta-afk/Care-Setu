@@ -14,6 +14,7 @@ import type { FastifyInstance } from "fastify";
 import { requireDoctorAccess } from "../middleware/doctor-scope";
 import { buildCareRecord } from "../services/care-record-export.service";
 import { logAccess } from "../services/audit-logger.service";
+import { accrueCmeFor } from "../services/cme-accrual.service";
 import { sendEmail } from "../../integrations/email-sender";
 import { prisma } from "../../db/client";
 
@@ -51,6 +52,12 @@ export function registerDoctorCareRecordRoutes(fastify: FastifyInstance) {
         resourceId: result.recordId,
         isOutOfScope: false,
         isCrossHospital: false,
+      });
+
+      // Award CME credit for medical record documentation (Hook 7)
+      accrueCmeFor("defense_mode_export", user.doctorId, {
+        recordId: result.recordId,
+        description: "Complete care record generated",
       });
 
       // Email the report to the doctor's verified email (non-blocking)

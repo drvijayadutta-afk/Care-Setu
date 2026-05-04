@@ -17,6 +17,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireDoctorAccess } from "../middleware/doctor-scope";
 import { transcribeAndStructure } from "../services/voice-soap.service";
+import { accrueCmeFor } from "../services/cme-accrual.service";
 import { prisma } from "../../db/client";
 
 export function registerDoctorVoiceNoteRoutes(fastify: FastifyInstance) {
@@ -206,6 +207,9 @@ export function registerDoctorVoiceNoteRoutes(fastify: FastifyInstance) {
           signedByDoctorId: user.doctorId,
         },
       });
+
+      // Award CME credit for case documentation (Hook 7)
+      accrueCmeFor("case_documentation", user.doctorId, { noteId, description: "SOAP voice note signed" });
 
       return {
         noteId: signed.id,
