@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { DoctorNavBar } from './nav-bar';
 
 export const metadata: Metadata = {
   title: 'Care Setu — Doctor',
@@ -22,7 +23,8 @@ export const viewport: Viewport = {
 export default function DoctorLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50 antialiased">
-      {children}
+      <div className="pb-16">{children}</div>
+      <DoctorNavBar />
     </div>
   );
 }

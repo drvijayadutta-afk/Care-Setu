@@ -224,7 +224,17 @@ model Conversation {
   intent      String?
   createdAt   DateTime @default(now())
 
+  // Hook 4: AI triage fields (populated by triage-classifier job for inbound patient messages)
+  triageCategory  String?   // urgent | routine | educational | null (not yet triaged or outbound)
+  triageUrgency   String?   // high | medium | low (finer-grain within category)
+  suggestedReply  String?   // AI-drafted reply for the doctor's inbox
+  triagedAt       DateTime?
+  replyDoctorId   String?   // Doctor.id who sent the reply
+  repliedAt       DateTime?
+
   patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([patientId, triageCategory, createdAt])
 }
 
 model CaregiverConversation {
