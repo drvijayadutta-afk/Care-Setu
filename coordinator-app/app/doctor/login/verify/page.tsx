@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://care-setu-backend.onrender.com';
 
-export default function DoctorVerifyPage() {
+function VerifyInner() {
   const router = useRouter();
   const params = useSearchParams();
   const [error, setError] = useState('');
@@ -61,5 +61,22 @@ export default function DoctorVerifyPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function DoctorVerifyPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center px-6 py-12">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-md">
+            <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
+            <p className="text-sm text-gray-600">Signing you in…</p>
+          </div>
+        </div>
+      }
+    >
+      <VerifyInner />
+    </Suspense>
   );
 }
