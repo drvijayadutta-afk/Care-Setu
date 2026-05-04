@@ -36,8 +36,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Care Setu</h1>
-          <p className="mt-2 text-gray-600">Coordinator Dashboard</p>
+          <h1 className="text-3xl font-bold text-gray-900">Onco Board</h1>
+          <p className="mt-2 text-gray-600">by Care Setu — Sign in to your workspace</p>
         </div>
 
         {error && (

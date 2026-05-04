@@ -28,7 +28,7 @@ export async function registerDoctorAuthRoutes(fastify: FastifyInstance) {
     "/auth/doctor/request-magic-link",
     {
       config: {
-        rateLimit: { max: 5, timeWindow: 15 * 60 * 1000 },
+        rateLimit: { max: 100, timeWindow: 15 * 60 * 1000 },
       },
     },
     async (request, reply) => {

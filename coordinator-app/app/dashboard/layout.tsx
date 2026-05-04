@@ -55,8 +55,8 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <aside className="w-64 bg-indigo-900 text-white relative">
         <div className="p-6">
-          <h1 className="text-2xl font-bold">Care Setu</h1>
-          <p className="mt-2 text-indigo-200">Coordinator Dashboard</p>
+          <h1 className="text-2xl font-bold">Onco Board</h1>
+          <p className="mt-2 text-indigo-200">by Care Setu</p>
         </div>
 
         <nav className="mt-8 space-y-2 px-4">

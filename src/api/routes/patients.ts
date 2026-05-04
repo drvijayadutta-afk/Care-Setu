@@ -17,6 +17,9 @@ export function registerPatientRoutes(
 
   fastify.get("/patients", { preHandler: auth }, async (request, reply) => {
     const user = (request as any).user as { sub: string; role: string };
+    if (user.role === "DOCTOR") {
+      return reply.status(403).send({ error: "Coordinator access required" });
+    }
     // ADMIN sees all patients; COORDINATORs see their assigned patients plus
     // unassigned patients (null assignedCoordinatorId) during the backfill window.
     if (user.role === "ADMIN") {
