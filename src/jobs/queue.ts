@@ -5,6 +5,14 @@ const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 
 export const redisConnection = new IORedis(redisUrl, {
   maxRetriesPerRequest: null,
+  // Give up retrying quickly so a dead Redis doesn't stall the server
+  retryStrategy: (times) => Math.min(times * 200, 5000),
+});
+
+// Prevent unhandled 'error' events from crashing the process.
+// BullMQ workers log their own errors; this is a safety net for auth/connect errors.
+redisConnection.on("error", (err: Error) => {
+  console.error("[Redis] Connection error (workers paused):", err.message);
 });
 
 // Queue definitions

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Care Setu - Coordinator Dashboard",
-  description: "Monitor and manage cancer care patients",
+  title: "Onco Board — Care Setu",
+  description: "Onco Board: AI-powered oncology care coordination for Indian hospitals",
 };
 
 export default function RootLayout({

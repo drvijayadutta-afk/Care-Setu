@@ -1,5 +1,6 @@
 import { MessagingChannel, WhatsAppChannel, TelegramChannel, ChannelAddress } from "./types";
 import { prisma } from "../db/client";
+import { logOutbound } from "../api/services/outbound-logger.service";
 
 // ─── Singleton Channel Instances ───────────────────────────────────────────────
 
@@ -20,7 +21,7 @@ export class MessagingRouter {
   async getChannelAndAddress(
     patientIdOrWhatsapp: string,
     isWhatsappNumber?: boolean
-  ): Promise<{ channel: MessagingChannel; address: ChannelAddress }> {
+  ): Promise<{ channel: MessagingChannel; address: ChannelAddress; patientId: string }> {
     const where = isWhatsappNumber
       ? { whatsappNumber: patientIdOrWhatsapp }
       : { id: patientIdOrWhatsapp };
@@ -33,6 +34,7 @@ export class MessagingRouter {
       return {
         channel: telegramChannel,
         address: { kind: "telegram", chatId: patient.telegramChatId },
+        patientId: patient.id,
       };
     }
 
@@ -40,6 +42,7 @@ export class MessagingRouter {
       return {
         channel: whatsappChannel,
         address: { kind: "whatsapp", phoneE164: patient.whatsappNumber },
+        patientId: patient.id,
       };
     }
 
@@ -57,21 +60,34 @@ export class MessagingRouter {
     return process.env.TELEGRAM_BOT_TOKEN ? "telegram" : "whatsapp";
   }
 
-  // Convenience methods: get patient → send message
-  // Accepts either patientId or whatsappNumber via the isWhatsappNumber flag
-  async sendText(patientIdOrWhatsapp: string, body: string, isWhatsappNumber = false): Promise<string | null> {
-    const { channel, address } = await this.getChannelAndAddress(patientIdOrWhatsapp, isWhatsappNumber);
-    return channel.sendText(address, body);
+  // Convenience methods: get patient → send message → log outbound record
+  // Accepts either patientId or whatsappNumber via the isWhatsappNumber flag.
+  // messageType is stored in OutboundMessage for the communication log tab.
+  async sendText(
+    patientIdOrWhatsapp: string,
+    body: string,
+    isWhatsappNumber = false,
+    messageType = "coordinator_manual"
+  ): Promise<string | null> {
+    const { channel, address, patientId } = await this.getChannelAndAddress(patientIdOrWhatsapp, isWhatsappNumber);
+    const externalId = await channel.sendText(address, body);
+    const recipientRef = address.kind === "whatsapp" ? address.phoneE164 : address.chatId;
+    logOutbound({ patientId, channel: address.kind, recipientRef, messageType, content: body, externalId });
+    return externalId;
   }
 
   async sendButtons(
     patientIdOrWhatsapp: string,
     body: string,
     buttons: { id: string; title: string }[],
-    isWhatsappNumber = false
+    isWhatsappNumber = false,
+    messageType = "coordinator_manual"
   ): Promise<string | null> {
-    const { channel, address } = await this.getChannelAndAddress(patientIdOrWhatsapp, isWhatsappNumber);
-    return channel.sendButtons(address, body, buttons);
+    const { channel, address, patientId } = await this.getChannelAndAddress(patientIdOrWhatsapp, isWhatsappNumber);
+    const externalId = await channel.sendButtons(address, body, buttons);
+    const recipientRef = address.kind === "whatsapp" ? address.phoneE164 : address.chatId;
+    logOutbound({ patientId, channel: address.kind, recipientRef, messageType, content: body, externalId });
+    return externalId;
   }
 
   async sendList(
@@ -79,10 +95,14 @@ export class MessagingRouter {
     body: string,
     buttonLabel: string,
     sections: { title: string; rows: { id: string; title: string; description?: string }[] }[],
-    isWhatsappNumber = false
+    isWhatsappNumber = false,
+    messageType = "coordinator_manual"
   ): Promise<string | null> {
-    const { channel, address } = await this.getChannelAndAddress(patientIdOrWhatsapp, isWhatsappNumber);
-    return channel.sendList(address, body, buttonLabel, sections);
+    const { channel, address, patientId } = await this.getChannelAndAddress(patientIdOrWhatsapp, isWhatsappNumber);
+    const externalId = await channel.sendList(address, body, buttonLabel, sections);
+    const recipientRef = address.kind === "whatsapp" ? address.phoneE164 : address.chatId;
+    logOutbound({ patientId, channel: address.kind, recipientRef, messageType, content: body, externalId });
+    return externalId;
   }
 
   async sendTemplate(
@@ -90,16 +110,20 @@ export class MessagingRouter {
     templateName: string,
     languageCode: string,
     components?: object[],
-    isWhatsappNumber = false
+    isWhatsappNumber = false,
+    messageType = "coordinator_manual"
   ): Promise<string | null> {
-    const { channel, address } = await this.getChannelAndAddress(patientIdOrWhatsapp, isWhatsappNumber);
+    const { channel, address, patientId } = await this.getChannelAndAddress(patientIdOrWhatsapp, isWhatsappNumber);
     // Compile-time safety: sendTemplate is only callable if channel.supportsTemplates is true
     if (!channel.supportsTemplates) {
       throw new Error(
         `Patient's preferred channel (${address.kind}) does not support templates. Use explicit channel selection or switch to WhatsApp.`
       );
     }
-    return channel.sendTemplate?.(address, templateName, languageCode, components) ?? null;
+    const externalId = await (channel.sendTemplate?.(address, templateName, languageCode, components) ?? null);
+    const recipientRef = address.kind === "whatsapp" ? address.phoneE164 : address.chatId;
+    logOutbound({ patientId, channel: address.kind, recipientRef, messageType, content: templateName, externalId });
+    return externalId;
   }
 }
 

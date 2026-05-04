@@ -3,8 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useCoordinatorStore } from '@/lib/store';
+import { getMe } from '@/lib/api';
 import Link from 'next/link';
-import { FiLogOut, FiUsers, FiHome, FiSettings } from 'react-icons/fi';
+import { FiLogOut, FiUsers, FiHome, FiSettings, FiUserCheck, FiGitBranch, FiShield, FiTrendingUp } from 'react-icons/fi';
 import { ToastProvider } from '@/lib/toast';
 import { NotificationsBell } from '@/components/NotificationsBell';
 
@@ -19,25 +20,24 @@ export default function DashboardLayout({
     setAuthenticated, setCoordinatorRole, setCoordinatorName, logout,
   } = useCoordinatorStore();
 
-  // Hydrate auth state from localStorage on mount — survives page reloads.
+  // Hydrate auth state by calling /auth/me — the HttpOnly cookie is sent
+  // automatically by the browser. Missing/expired cookie → 401 → redirect to login.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!isAuthenticated) {
-      const token = localStorage.getItem('coordinator_token');
-      if (token) {
-        const role = localStorage.getItem('coordinator_role') || 'COORDINATOR';
+    if (isAuthenticated) return;
+    let cancelled = false;
+    getMe()
+      .then((me) => {
+        if (cancelled) return;
         setAuthenticated(true);
-        setCoordinatorRole(role);
-        // Best-effort: name will be set on next login or stays blank
-        if (!coordinatorName) {
-          const cachedName = localStorage.getItem('coordinator_name');
-          if (cachedName) setCoordinatorName(cachedName);
-        }
-      } else {
-        router.push('/');
-      }
-    }
-  }, [isAuthenticated, router, setAuthenticated, setCoordinatorRole, setCoordinatorName, coordinatorName]);
+        setCoordinatorRole(me.role || 'COORDINATOR');
+        if (me.name) setCoordinatorName(me.name);
+      })
+      .catch(() => {
+        if (!cancelled) router.push('/');
+      });
+    return () => { cancelled = true; };
+  }, [isAuthenticated, router, setAuthenticated, setCoordinatorRole, setCoordinatorName]);
 
   const handleLogout = () => {
     logout();
@@ -55,8 +55,8 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <aside className="w-64 bg-indigo-900 text-white relative">
         <div className="p-6">
-          <h1 className="text-2xl font-bold">Care Setu</h1>
-          <p className="mt-2 text-indigo-200">Coordinator Dashboard</p>
+          <h1 className="text-2xl font-bold">Onco Board</h1>
+          <p className="mt-2 text-indigo-200">by Care Setu</p>
         </div>
 
         <nav className="mt-8 space-y-2 px-4">
@@ -74,14 +74,44 @@ export default function DashboardLayout({
             <FiUsers className="text-xl" />
             Patients
           </Link>
+          <Link
+            href="/dashboard/doctors"
+            className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
+          >
+            <FiUserCheck className="text-xl" />
+            Doctors
+          </Link>
+          <Link
+            href="/dashboard/referrals"
+            className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
+          >
+            <FiGitBranch className="text-xl" />
+            Referrals
+          </Link>
           {isAdmin && (
-            <Link
-              href="/dashboard/admin"
-              className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
-            >
-              <FiSettings className="text-xl" />
-              Admin
-            </Link>
+            <>
+              <Link
+                href="/dashboard/admin"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
+              >
+                <FiSettings className="text-xl" />
+                Admin
+              </Link>
+              <Link
+                href="/dashboard/admin/outcomes"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
+              >
+                <FiTrendingUp className="text-xl" />
+                Outcomes
+              </Link>
+              <Link
+                href="/dashboard/admin/compliance"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-indigo-800"
+              >
+                <FiShield className="text-xl" />
+                Compliance
+              </Link>
+            </>
           )}
         </nav>
 

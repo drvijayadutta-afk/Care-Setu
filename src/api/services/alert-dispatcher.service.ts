@@ -1,6 +1,7 @@
 import { prisma } from "../../db/client";
 import { sendText } from "../../webhook/sender";
 import { wsManager } from "../../websocket/manager";
+import { config } from "../../config/env";
 
 /**
  * Dispatch an Alert to:
@@ -37,16 +38,37 @@ export async function dispatchAlert(alertId: string): Promise<void> {
       alertType: alert.type,
     });
 
-    // 2. WhatsApp dispatch — only for HIGH/CRITICAL severities
+    // 2. Global dashboard broadcast — alert badge on patient row + activity feed entry
+    const ts = new Date().toISOString();
+    wsManager.broadcastGlobal({
+      type: "alert_badge",
+      patientId: alert.patientId,
+      severity: alert.severity,
+      alertType: alert.type,
+      timestamp: ts,
+    });
+    wsManager.broadcastGlobal({
+      type: "activity",
+      patientId: alert.patientId,
+      patientName: alert.patient.name ?? "Patient",
+      eventKind: "alert",
+      summary: alert.message,
+      severity: alert.severity,
+      timestamp: ts,
+    });
+
+    // 3. WhatsApp dispatch — only for HIGH/CRITICAL severities
     if (alert.severity !== "high" && alert.severity !== "critical") return;
 
     const primary = alert.patient.careTeamMembers.find(m => m.isPrimary)
       ?? alert.patient.careTeamMembers[0];
     if (!primary?.phone) return;
 
-    const patientName = alert.patient.name || "patient";
+    // No patient name or clinical details in the message body — PHI is only
+    // accessible behind auth. The deep-link directs the coordinator to the patient.
     const severityIcon = alert.severity === "critical" ? "🚨" : "⚠️";
-    const msg = `${severityIcon} ALERT for ${patientName}: ${alert.message}. Open Care Setu to review.`;
+    const deepLink = `${config.coordinatorAppUrl}/dashboard/patients/${alert.patient.id}`;
+    const msg = `${severityIcon} Care Setu alert — action required.\nSeverity: ${alert.severity.toUpperCase()}\n\nLog in to review:\n${deepLink}`;
 
     const delivery = await prisma.alertDelivery.create({
       data: {

@@ -13,6 +13,12 @@ import type {
   InboxJobData,
 } from "./queue";
 
+// Stall-check interval for all workers: 5 minutes (default is 30s).
+// This dramatically reduces Redis command consumption on free-tier Upstash.
+// Trade-off: stalled jobs are detected up to 5 min later, which is fine for
+// a clinical care app where jobs are short-lived (< 10s each).
+const STALLED_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
 // Inbox worker — drains the durable webhook inbox queue.
 // Errors thrown here trigger BullMQ retry with exponential back-off.
 export const inboxWorker = new Worker(
@@ -28,7 +34,7 @@ export const inboxWorker = new Worker(
       await processTelegramUpdate(data.payload);
     }
   },
-  { connection: redisConnection, concurrency: 5 }
+  { connection: redisConnection, concurrency: 5, stalledInterval: STALLED_INTERVAL }
 );
 
 inboxWorker.on("failed", (job, err) => {
@@ -56,7 +62,7 @@ export const checkinWorker = new Worker(
         break;
     }
   },
-  { connection: redisConnection, concurrency: 10 }
+  { connection: redisConnection, concurrency: 10, stalledInterval: STALLED_INTERVAL }
 );
 
 // Appointment worker
@@ -74,7 +80,7 @@ export const appointmentWorker = new Worker(
       );
     }
   },
-  { connection: redisConnection, concurrency: 5 }
+  { connection: redisConnection, concurrency: 5, stalledInterval: STALLED_INTERVAL }
 );
 
 // Doctor signal worker (runs on cron)
@@ -83,7 +89,7 @@ export const doctorSignalWorker = new Worker(
   async () => {
     await sendDoctorWeeklySignals();
   },
-  { connection: redisConnection, concurrency: 1 }
+  { connection: redisConnection, concurrency: 1, stalledInterval: STALLED_INTERVAL }
 );
 
 checkinWorker.on("failed", (job, err) => {

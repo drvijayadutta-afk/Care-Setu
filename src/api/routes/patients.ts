@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import type { IPatientRepository, IConversationRepository, IRecordRepository } from "../../repositories/types";
 import type { AiPort } from "../../ports/ai";
 import { getMdtSummary } from "../services/mdt-summary.service";
+import { logAccess } from "../services/audit-logger.service";
+import { prisma } from "../../db/client";
 
 export function registerPatientRoutes(
   fastify: FastifyInstance,
@@ -15,6 +17,9 @@ export function registerPatientRoutes(
 
   fastify.get("/patients", { preHandler: auth }, async (request, reply) => {
     const user = (request as any).user as { sub: string; role: string };
+    if (user.role === "DOCTOR") {
+      return reply.status(403).send({ error: "Coordinator access required" });
+    }
     // ADMIN sees all patients; COORDINATORs see their assigned patients plus
     // unassigned patients (null assignedCoordinatorId) during the backfill window.
     if (user.role === "ADMIN") {
@@ -110,10 +115,66 @@ export function registerPatientRoutes(
     };
   });
 
+  fastify.get("/patients/:id/outbound-messages", { preHandler: authScope }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const query = request.query as { limit?: string; cursor?: string; messageType?: string };
+    const limit = Math.min(Number(query.limit ?? 50), 100);
+    const where: any = { patientId: id };
+    if (query.messageType) where.messageType = query.messageType;
+    if (query.cursor) where.sentAt = { lt: new Date(query.cursor) };
+    return await prisma.outboundMessage.findMany({
+      where,
+      orderBy: { sentAt: "desc" },
+      take: limit,
+    });
+  });
+
+  fastify.get("/patients/:id/alerts", { preHandler: authScope }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const query = request.query as { resolved?: string; limit?: string };
+    const where: any = { patientId: id };
+    if (query.resolved !== undefined) where.resolved = query.resolved === "true";
+    return await prisma.alert.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: Math.min(Number(query.limit ?? 50), 100),
+    });
+  });
+
+  fastify.get("/patients/:id/medications", { preHandler: authScope }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return await prisma.medication.findMany({
+      where: { patientId: id },
+      orderBy: { createdAt: "desc" },
+    });
+  });
+
+  fastify.delete("/patients/:id", { preHandler: auth }, async (request, reply) => {
+    const user = (request as any).user as { role: string };
+    if (user.role !== "ADMIN") return reply.status(403).send({ error: "ADMIN role required" });
+    const { id } = request.params as { id: string };
+    const patient = await patientRepo.findUnique(id);
+    if (!patient) return reply.status(404).send({ error: "Patient not found" });
+    await prisma.patient.update({ where: { id }, data: { isActive: false } });
+    return reply.status(204).send();
+  });
+
   fastify.get("/patients/:id/mdt-summary", { preHandler: authScope }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const user = (request as any).user as { sub: string; role: string; hospitalName?: string };
     try {
       const summary = await getMdtSummary(id, aiPort);
+      logAccess({
+        coordinatorId: user.sub,
+        patientId: id,
+        action: "mdt_brief_generated",
+        resourceType: "patient_summary",
+        resourceId: id,
+        isOutOfScope: false,
+        isCrossHospital: false,
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"],
+      });
       return { summary };
     } catch (error: any) {
       if (error.message === "Patient not found") {

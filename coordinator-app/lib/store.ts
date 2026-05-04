@@ -1,5 +1,8 @@
 import { create } from 'zustand';
+import axios from 'axios';
 import { Patient } from './api';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://care-setu-backend.onrender.com';
 
 interface CoordinatorStore {
   isAuthenticated: boolean;
@@ -27,13 +30,14 @@ export const useCoordinatorStore = create<CoordinatorStore>((set) => ({
   setSelectedPatient: (id) => set({ selectedPatientId: id }),
   setPatients: (patients) => set({ patients }),
   logout: () => {
+    // Clear local state + tell server to clear the HttpOnly cookie.
     set({
       isAuthenticated: false,
       coordinatorName: '',
       coordinatorRole: 'COORDINATOR',
       selectedPatientId: null,
     });
-    localStorage.removeItem('coordinator_token');
-    localStorage.removeItem('coordinator_role');
+    // Fire-and-forget — even if it fails, local state is already cleared.
+    axios.post(`${API_URL}/auth/logout`, {}, { withCredentials: true }).catch(() => {});
   },
 }));

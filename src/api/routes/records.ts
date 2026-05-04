@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { IRecordRepository } from "../../repositories/types";
 import type { AiPort } from "../../ports/ai";
 import type { StoragePort } from "../../ports/storage";
@@ -6,7 +6,47 @@ import { deleteFile } from "../../integrations/supabase-storage";
 import { extractDocument } from "../services/extract-document.service";
 import { approveExtractionDraft, rejectExtractionDraft } from "../services/approve-extraction-draft.service";
 import { notifyReportUploaded } from "../services/notify-report-upload.service";
+import { logAccess } from "../services/audit-logger.service";
 import { prisma } from "../../db/client";
+
+// Verify the caller has scope over the patient that owns this record.
+// Used by DELETE/PATCH endpoints that accept a record ID, not a patient ID.
+async function checkRecordScope(
+  patientId: string,
+  request: FastifyRequest,
+  reply: FastifyReply
+): Promise<boolean> {
+  const user = (request as any).user as { sub: string; role: string; hospitalName?: string };
+  if (user.role === "ADMIN") return true;
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: patientId },
+    select: { assignedCoordinatorId: true, hospitalName: true },
+  });
+  if (!patient) {
+    reply.status(404).send({ error: "Patient not found" });
+    return false;
+  }
+
+  const isOutOfScope = patient.assignedCoordinatorId !== user.sub;
+  const isCrossHospital = !!(user.hospitalName && patient.hospitalName && patient.hospitalName !== user.hospitalName);
+
+  logAccess({
+    coordinatorId: user.sub,
+    patientId,
+    action: "record_delete",
+    isOutOfScope,
+    isCrossHospital,
+    ipAddress: request.ip,
+    userAgent: request.headers["user-agent"],
+  });
+
+  if (isOutOfScope) {
+    reply.status(403).send({ error: "Forbidden" });
+    return false;
+  }
+  return true;
+}
 
 export function registerRecordRoutes(
   fastify: FastifyInstance,
@@ -95,6 +135,9 @@ export function registerRecordRoutes(
 
   fastify.delete("/lab-results/:id", { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const rec = await prisma.labResult.findUnique({ where: { id }, select: { patientId: true } });
+    if (!rec) return reply.status(404).send({ error: "Not found" });
+    if (!(await checkRecordScope(rec.patientId, request, reply))) return;
     await recordRepo.labResults.delete(id);
     return { ok: true };
   });
@@ -133,6 +176,9 @@ export function registerRecordRoutes(
 
   fastify.delete("/imaging/:id", { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const rec = await prisma.imagingReport.findUnique({ where: { id }, select: { patientId: true } });
+    if (!rec) return reply.status(404).send({ error: "Not found" });
+    if (!(await checkRecordScope(rec.patientId, request, reply))) return;
     await recordRepo.imaging.delete(id);
     return { ok: true };
   });
@@ -173,6 +219,9 @@ export function registerRecordRoutes(
 
   fastify.delete("/pathology/:id", { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const rec = await prisma.pathologyReport.findUnique({ where: { id }, select: { patientId: true } });
+    if (!rec) return reply.status(404).send({ error: "Not found" });
+    if (!(await checkRecordScope(rec.patientId, request, reply))) return;
     await recordRepo.pathology.delete(id);
     return { ok: true };
   });
@@ -215,6 +264,9 @@ export function registerRecordRoutes(
 
   fastify.delete("/vitals/:id", { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const rec = await prisma.vitalSign.findUnique({ where: { id }, select: { patientId: true } });
+    if (!rec) return reply.status(404).send({ error: "Not found" });
+    if (!(await checkRecordScope(rec.patientId, request, reply))) return;
     await recordRepo.vitals.delete(id);
     return { ok: true };
   });
@@ -248,6 +300,9 @@ export function registerRecordRoutes(
 
   fastify.delete("/clinical-notes/:id", { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const rec = await prisma.clinicalNote.findUnique({ where: { id }, select: { patientId: true } });
+    if (!rec) return reply.status(404).send({ error: "Not found" });
+    if (!(await checkRecordScope(rec.patientId, request, reply))) return;
     await recordRepo.notes.delete(id);
     return { ok: true };
   });
@@ -308,12 +363,25 @@ export function registerRecordRoutes(
 
   fastify.get("/documents/:id/download-url", { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const user = (request as any).user as { sub: string; role: string; hospitalName?: string };
     const doc = await prisma.patientDocument.findUnique({
       where: { id },
-      select: { storagePath: true, fileType: true, title: true },
+      select: { storagePath: true, fileType: true, title: true, patientId: true },
     });
     if (!doc) return reply.status(404).send({ error: "Document not found" });
+    if (!(await checkRecordScope(doc.patientId, request, reply))) return;
     const { downloadUrl } = await storagePort.generateDownloadUrl(doc.storagePath);
+    logAccess({
+      coordinatorId: user.sub,
+      patientId: doc.patientId,
+      action: "document_download",
+      resourceType: "document",
+      resourceId: id,
+      isOutOfScope: false,
+      isCrossHospital: false,
+      ipAddress: request.ip,
+      userAgent: request.headers["user-agent"],
+    });
     return { downloadUrl, title: doc.title, fileType: doc.fileType };
   });
 
@@ -321,6 +389,7 @@ export function registerRecordRoutes(
     const { id } = request.params as { id: string };
     const doc = await prisma.patientDocument.findUnique({ where: { id } });
     if (!doc) return reply.status(404).send({ error: "Document not found" });
+    if (!(await checkRecordScope(doc.patientId, request, reply))) return;
     await deleteFile(doc.storagePath);
     await recordRepo.documents.delete(id);
     return { ok: true };
@@ -373,6 +442,9 @@ export function registerRecordRoutes(
 
   fastify.delete("/care-team/:id", { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const rec = await prisma.careTeamMember.findUnique({ where: { id }, select: { patientId: true } });
+    if (!rec) return reply.status(404).send({ error: "Not found" });
+    if (!(await checkRecordScope(rec.patientId, request, reply))) return;
     await recordRepo.careTeam.delete(id);
     return { ok: true };
   });

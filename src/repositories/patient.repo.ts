@@ -8,17 +8,13 @@ export class PatientRepository implements IPatientRepository {
 
   async findMany(opts: { coordinatorId?: string; take?: number; orderBy?: any } = {}) {
     const { coordinatorId, ...rest } = opts;
+    const coordinatorWhere = coordinatorId !== undefined
+      ? { OR: [{ assignedCoordinatorId: coordinatorId }, { assignedCoordinatorId: null }] }
+      : {};
     return prisma.patient.findMany({
       orderBy: { createdAt: "desc" },
       take: 50,
-      ...(coordinatorId !== undefined && {
-        where: {
-          OR: [
-            { assignedCoordinatorId: coordinatorId },
-            { assignedCoordinatorId: null },
-          ],
-        },
-      }),
+      where: { isActive: true, ...coordinatorWhere },
       ...rest,
     });
   }

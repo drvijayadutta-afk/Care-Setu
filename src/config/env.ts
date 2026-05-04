@@ -12,10 +12,16 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) =>
-      v ? v.split(",").map((s) => s.trim()).filter(Boolean) : ["http://localhost:3001", "http://localhost:3000"]
+      v ? v.split(",").map((s) => s.trim()).filter(Boolean) : [
+        "http://localhost:3001",
+        "http://localhost:3000",
+        "https://coordinator-app-self.vercel.app",
+        "https://care-setu-lac.vercel.app",
+      ]
     ),
-  // Set to "true" to enforce patient-scope 403s; default is log-only mode during rollout
-  PATIENT_SCOPE_ENFORCE: z
+  // Set to "true" to disable patient-scope enforcement (log-only during local dev).
+  // Default is ENFORCE (403 on cross-scope access) — opt-out, not opt-in.
+  PATIENT_SCOPE_NO_ENFORCE: z
     .string()
     .optional()
     .transform((v) => v === "true")
@@ -27,6 +33,9 @@ const envSchema = z.object({
     .default("auto"),
   // JWT token expiration (e.g., "8h", "7d", "24h")
   JWT_TTL: z.string().optional().default("8h"),
+  // Base URL of the coordinator app — used to generate deep-links in WhatsApp messages
+  // so PHI is never sent in message bodies (only accessible behind auth).
+  COORDINATOR_APP_URL: z.string().url().optional().default("https://care-setu-lac.vercel.app"),
   // Rate limiting for /auth/login (requests per 15 minutes)
   LOGIN_RATE_LIMIT: z.coerce.number().int().positive().optional().default(5),
 });
@@ -82,10 +91,11 @@ export const config = {
   port: env.PORT,
   jwtSecret: resolveJwtSecret(),
   allowedOrigins: env.ALLOWED_ORIGINS,
-  patientScopeEnforce: env.PATIENT_SCOPE_ENFORCE,
+  patientScopeNoEnforce: env.PATIENT_SCOPE_NO_ENFORCE,
   databaseSsl: env.DATABASE_SSL,
   jwtTtl: env.JWT_TTL,
   loginRateLimit: env.LOGIN_RATE_LIMIT,
+  coordinatorAppUrl: env.COORDINATOR_APP_URL,
 } as const;
 
 export type AppConfig = typeof config;

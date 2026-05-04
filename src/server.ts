@@ -3,7 +3,9 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import jwt from "@fastify/jwt";
+import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
+import multipart from "@fastify/multipart";
 import {
   handleWebhookVerification,
   handleWebhookMessage,
@@ -21,6 +23,7 @@ import { doctorSignalQueue, checkinQueue } from "./jobs/queue";
 import { pollAisensyMessages } from "./integrations/aisensy-poller";
 import { registerApiRoutes } from "./api/routes";
 import { registerAuthRoutes } from "./api/auth";
+import { registerDoctorAuthRoutes } from "./api/routes/doctor-auth";
 import { registerWebSocketRoutes } from "./websocket/routes";
 import { requirePatientAccess } from "./api/middleware/patient-scope";
 import { PatientRepository } from "./repositories/patient.repo";
@@ -81,8 +84,25 @@ function startAisensyPolling() {
 
 async function start() {
   try {
-    // Add CORS support — restrict to known frontend origins
-    await fastify.register(cors, { origin: config.allowedOrigins });
+    // Add CORS support — allow configured origins plus always-valid patterns
+    const allowedSet = new Set(config.allowedOrigins.map(o => o.toLowerCase()));
+    await fastify.register(cors, {
+      origin: (origin, cb) => {
+        if (!origin) return cb(null, true); // non-browser (curl/server) — allow
+        const o = origin.toLowerCase();
+        if (
+          allowedSet.has(o) ||
+          o.endsWith(".vercel.app") ||
+          o.startsWith("http://localhost:")
+        ) {
+          return cb(null, true);
+        }
+        cb(new Error("CORS: origin not allowed"), false);
+      },
+      methods: ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Authorization", "Content-Type"],
+      credentials: true,
+    });
 
     // Rate limiting — 15-minute windows, configurable per endpoint
     await fastify.register(rateLimit, {
@@ -90,8 +110,24 @@ async function start() {
       timeWindow: 15 * 60 * 1000, // 15 minutes
     });
 
-    // JWT authentication — secret validated at boot in src/config/env.ts
-    await fastify.register(jwt, { secret: config.jwtSecret });
+    // Cookie support for HttpOnly JWT cookies
+    await fastify.register(cookie);
+
+    // Multipart file upload support (Hook 5: voice notes)
+    await fastify.register(multipart, {
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10 MB max audio
+        files: 1,
+      },
+    });
+
+    // JWT authentication — secret validated at boot in src/config/env.ts.
+    // The cookie config tells @fastify/jwt to read the token from the cookie
+    // named `coordinator_token` when no Authorization header is present.
+    await fastify.register(jwt, {
+      secret: config.jwtSecret,
+      cookie: { cookieName: "coordinator_token", signed: false },
+    });
 
     // Decorator used by protected routes
     fastify.decorate("authenticate", async (request: any, reply: any) => {
@@ -121,6 +157,7 @@ async function start() {
 
     // Auth routes (public — no JWT required)
     await registerAuthRoutes(fastify);
+    await registerDoctorAuthRoutes(fastify);
 
     // Register API routes (protected inside via preHandler)
     await registerApiRoutes(fastify);

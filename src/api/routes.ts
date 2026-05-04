@@ -9,6 +9,18 @@ import { registerRecordRoutes } from "./routes/records";
 import { registerAppointmentRoutes } from "./routes/appointments";
 import { registerMessageRoutes } from "./routes/messages";
 import { registerTumorBoardRoutes } from "./routes/tumor-board";
+import { registerActivityFeedRoutes } from "./routes/activity-feed";
+import { registerDoctorRoutes } from "./routes/doctors";
+import { registerReferralRoutes } from "./routes/referrals";
+import { registerAuditRoutes } from "./routes/audit";
+import { registerOutcomesRoutes } from "./routes/outcomes";
+import { registerDoctorTodayRoutes } from "./routes/doctor-today";
+import { registerDoctorCareRecordRoutes } from "./routes/doctor-care-record";
+import { registerDoctorInboxRoutes } from "./routes/doctor-inbox";
+import { registerDoctorVoiceNoteRoutes } from "./routes/doctor-voice-notes";
+import { registerDoctorOutcomesRoutes } from "./routes/doctor-outcomes";
+import { registerDoctorCmeRoutes } from "./routes/doctor-cme";
+import { registerDoctorCohortRoutes } from "./routes/doctor-cohorts";
 
 export async function registerApiRoutes(fastify: FastifyInstance) {
   const auth = [(fastify as any).authenticate];
@@ -42,4 +54,16 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
   registerAppointmentRoutes(fastify, recordRepo);
   registerMessageRoutes(fastify, patientRepo, conversationRepo);
   registerTumorBoardRoutes(fastify, aiPort);
+  registerActivityFeedRoutes(fastify);
+  registerDoctorRoutes(fastify);
+  registerReferralRoutes(fastify);
+  registerAuditRoutes(fastify);
+  registerOutcomesRoutes(fastify);
+  registerDoctorTodayRoutes(fastify);
+  registerDoctorCareRecordRoutes(fastify);
+  registerDoctorInboxRoutes(fastify);
+  registerDoctorVoiceNoteRoutes(fastify);
+  registerDoctorOutcomesRoutes(fastify);
+  registerDoctorCmeRoutes(fastify);
+  registerDoctorCohortRoutes(fastify);
 }

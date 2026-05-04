@@ -2,22 +2,14 @@ import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://care-setu-backend.onrender.com';
 
+// withCredentials sends the HttpOnly auth cookie with every request.
+// Authorization header is no longer used — JWT lives in the cookie.
 const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-});
-
-// Add token to requests
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('coordinator_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-  return config;
+  withCredentials: true,
 });
 
 export interface Patient {
@@ -263,11 +255,27 @@ export const healthCheck = async () => {
 
 // Auth
 export const login = async (email: string, password: string) => {
+  // Server sets the JWT as an HttpOnly cookie. Response no longer carries the token.
   const { data } = await api.post('/auth/login', { email, password });
   return data as {
-    token: string;
     coordinator: { id: string; email: string; name: string; role: string; hospitalName?: string };
   };
+};
+
+export const getMe = async () => {
+  const { data } = await api.get('/auth/me');
+  return data as {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    hospitalName?: string;
+  };
+};
+
+export const getWsTicket = async () => {
+  const { data } = await api.post('/auth/ws-ticket', {});
+  return (data as { token: string }).token;
 };
 
 // ─── Lab Results ──────────────────────────────────────────────────────────────
@@ -486,7 +494,7 @@ export const signOffParticipant = async (
 };
 
 export const generateMeetingBrief = async (meetingId: string) => {
-  const { data } = await api.post(`/tumor-board-meetings/${meetingId}/brief`);
+  const { data } = await api.post(`/tumor-board-meetings/${meetingId}/brief`, {});
   return data as { briefText: string };
 };
 
@@ -506,6 +514,214 @@ export const createPatient = async (body: {
 }) => {
   const { data } = await api.post('/admin/patients', body);
   return data as Patient;
+};
+
+// ─── Outbound Message Log ─────────────────────────────────────────────────────
+
+export interface OutboundMessage {
+  id: string;
+  patientId: string;
+  channel: string;
+  recipientRef: string;
+  messageType: string;
+  content: string;
+  externalId: string | null;
+  status: string;
+  jobId: string | null;
+  sentAt: string;
+  failureReason: string | null;
+}
+
+export const getPatientOutboundMessages = async (
+  patientId: string,
+  opts?: { limit?: number; cursor?: string; messageType?: string }
+) => {
+  const params = new URLSearchParams();
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  if (opts?.cursor) params.set('cursor', opts.cursor);
+  if (opts?.messageType) params.set('messageType', opts.messageType);
+  const { data } = await api.get(`/patients/${patientId}/outbound-messages?${params}`);
+  return data as OutboundMessage[];
+};
+
+// ─── Doctors ──────────────────────────────────────────────────────────────────
+
+export interface Doctor {
+  id: string;
+  whatsappNumber: string;
+  name: string;
+  hospitalName: string;
+  specialization: string;
+  registrationNumber: string | null;
+  qualifications: string[];
+  department: string | null;
+  experienceYears: number | null;
+  secondaryPhone: string | null;
+  email: string | null;
+  availabilityNotes: string | null;
+  photoUrl: string | null;
+  bio: string | null;
+  isOptedIn: boolean;
+  createdAt: string;
+}
+
+export const getDoctors = async (hospitalName?: string) => {
+  const params = hospitalName ? `?hospitalName=${encodeURIComponent(hospitalName)}` : '';
+  const { data } = await api.get(`/doctors${params}`);
+  return data as (Doctor & { _count: { patients: number; careTeamMembers: number } })[];
+};
+
+export const getDoctor = async (doctorId: string) => {
+  const { data } = await api.get(`/doctors/${doctorId}`);
+  return data as Doctor;
+};
+
+export const createDoctor = async (body: Partial<Doctor>) => {
+  const { data } = await api.post('/doctors', body);
+  return data as Doctor;
+};
+
+export const updateDoctor = async (doctorId: string, body: Partial<Doctor>) => {
+  const { data } = await api.patch(`/doctors/${doctorId}`, body);
+  return data as Doctor;
+};
+
+export const linkCareTeamMemberToDoctor = async (memberId: string, doctorId: string) => {
+  const { data } = await api.patch(`/care-team/${memberId}/link-doctor`, { doctorId });
+  return data;
+};
+
+// ─── Referrals ────────────────────────────────────────────────────────────────
+
+export interface Referral {
+  id: string;
+  patientId: string;
+  fromDoctorId: string | null;
+  fromCoordinatorId: string | null;
+  toDoctorId: string;
+  reason: string;
+  urgency: string;
+  clinicalContext: string | null;
+  status: string;
+  acceptedAt: string | null;
+  seenAt: string | null;
+  completedAt: string | null;
+  declinedAt: string | null;
+  declineReason: string | null;
+  notificationSent: boolean;
+  createdAt: string;
+  updatedAt: string;
+  toDoctor?: Doctor;
+  fromCoordinator?: { name: string };
+  patient?: { name: string };
+}
+
+export const createReferral = async (
+  patientId: string,
+  body: { toDoctorId: string; reason: string; urgency: string; clinicalContext?: string }
+) => {
+  const { data } = await api.post(`/patients/${patientId}/referrals`, body);
+  return data as Referral;
+};
+
+export const getPatientReferrals = async (patientId: string) => {
+  const { data } = await api.get(`/patients/${patientId}/referrals`);
+  return data as Referral[];
+};
+
+export const getAllReferrals = async (filters?: {
+  status?: string; urgency?: string; toDoctorId?: string;
+}) => {
+  const params = new URLSearchParams(filters as any).toString();
+  const { data } = await api.get(`/referrals${params ? `?${params}` : ''}`);
+  return data as Referral[];
+};
+
+export const updateReferralStatus = async (
+  referralId: string,
+  status: string,
+  declineReason?: string
+) => {
+  const { data } = await api.patch(`/referrals/${referralId}/status`, { status, declineReason });
+  return data as Referral;
+};
+
+// ─── Audit Log (admin only) ───────────────────────────────────────────────────
+
+export const getAuditLog = async (filters?: {
+  coordinatorId?: string; patientId?: string; outOfScopeOnly?: boolean;
+  from?: string; to?: string; limit?: number; cursor?: string;
+}) => {
+  const params = new URLSearchParams();
+  if (filters?.coordinatorId) params.set('coordinatorId', filters.coordinatorId);
+  if (filters?.patientId) params.set('patientId', filters.patientId);
+  if (filters?.outOfScopeOnly) params.set('outOfScopeOnly', 'true');
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  if (filters?.limit) params.set('limit', String(filters.limit));
+  if (filters?.cursor) params.set('cursor', filters.cursor);
+  const { data } = await api.get(`/admin/audit-log?${params}`);
+  return data as any[];
+};
+
+export const getAuditSummary = async () => {
+  const { data } = await api.get('/admin/audit-log/summary');
+  return data as {
+    totalAccesses30d: number;
+    outOfScopeCount: number;
+    crossHospitalCount: number;
+    flaggedCoordinators: { coordinatorId: string; name: string; count: number }[];
+    topViewedPatients: { patientId: string; name: string; count: number }[];
+  };
+};
+
+// ─── Activity Feed ────────────────────────────────────────────────────────────
+
+export interface ActivityItem {
+  id: string;
+  type: string;
+  patientId: string;
+  patientName: string;
+  summary: string;
+  severity?: string;
+  createdAt: string;
+}
+
+export const getActivityFeed = async (limit = 50, cursor?: string) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+  const { data } = await api.get(`/activity-feed?${params}`);
+  return data as ActivityItem[];
+};
+
+// ─── Outcomes Dashboard ───────────────────────────────────────────────────────
+
+export interface OutcomesData {
+  periodDays: number;
+  patients: { total: number; active: number; checkinCompletion: number };
+  checkins: {
+    total: number;
+    avgScore: number | null;
+    lowScoreCount: number;
+    topSymptoms: { symptom: string; count: number }[];
+    scoreByDay: { date: string; avg: number }[];
+  };
+  alerts: {
+    total: number;
+    bySeverity: Record<string, number>;
+    resolvedCount: number;
+    avgResolutionHours: number | null;
+  };
+  meetings: { total: number; completed: number; decisionsRecorded: number; signOffRate: number };
+  documents: { uploaded: number };
+  medications: { logEntries: number };
+  cancerTypeBreakdown: { type: string; count: number }[];
+  protocolBreakdown: { protocol: string; count: number }[];
+}
+
+export const getOutcomes = async (days = 30): Promise<OutcomesData> => {
+  const { data } = await api.get(`/admin/outcomes?days=${days}`);
+  return data as OutcomesData;
 };
 
 export default api;

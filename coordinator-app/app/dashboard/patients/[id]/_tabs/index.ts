@@ -10,3 +10,5 @@ export { NotesTab } from './Notes';
 export { DocumentsTab } from './Documents';
 export { CareTeamTab } from './CareTeam';
 export { TumorBoardTab } from './TumorBoard';
+export { OutboundMessagesTab } from './OutboundMessages';
+export { ReferralsTab } from './Referrals';
