@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 const NAV = [
   { href: '/doctor/today', icon: '🗓', label: 'Today' },
   { href: '/doctor/inbox', icon: '📥', label: 'Inbox' },
-  // Voice note is launched from the patient page, not the bottom nav
+  { href: '/doctor/my-outcomes', icon: '📊', label: 'Outcomes' },
 ];
 
 export function DoctorNavBar() {
